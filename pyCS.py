@@ -1,15 +1,12 @@
+import warnings; warnings.filterwarnings( 'ignore', message='.*ESMF and ESMPy.*' )
+
+import os
 import sys
 import gc
-import os
 import netCDF4
-import pygmt as pg
-import numpy as np
-import xesmf as xe
-import matplotlib.pyplot as plt
-import cartopy.crs as ccrs
-import cmcrameri.cm as cmc
-from cartopy.mpl.ticker import LatitudeFormatter
-from scipy.interpolate import griddata
+import pygmt
+import numpy
+import xesmf
 
 def build_CS_grid(path):
     grid_CS  = []
@@ -19,13 +16,13 @@ def build_CS_grid(path):
         
         grid_CS.append( 
             { 
-                'lon'     : np.ma.filled( grid['XC'][:,:], np.nan ).astype( np.float32 ),
-                'lat'     : np.ma.filled( grid['YC'][:,:], np.nan ).astype( np.float32 ),
-                'lon_b'   : np.ma.filled( grid['XG'][:,:], np.nan ).astype( np.float32 ),
-                'lat_b'   : np.ma.filled( grid['YG'][:,:], np.nan ).astype( np.float32 ),
-                'angleCS' : np.ma.filled( grid['AngleCS'][:,:], np.nan ).astype( np.float32 ),
-                'angleSN' : np.ma.filled( grid['AngleSN'][:,:], np.nan ).astype( np.float32 ),
-                'hfac'    : np.ma.filled( grid['HFacC'][:,:], np.nan ).astype( np.float32 ) 
+                'lon'     : numpy.ma.filled( grid['XC'][:,:], numpy.nan ).astype( numpy.float32 ),
+                'lat'     : numpy.ma.filled( grid['YC'][:,:], numpy.nan ).astype( numpy.float32 ),
+                'lon_b'   : numpy.ma.filled( grid['XG'][:,:], numpy.nan ).astype( numpy.float32 ),
+                'lat_b'   : numpy.ma.filled( grid['YG'][:,:], numpy.nan ).astype( numpy.float32 ),
+                'angleCS' : numpy.ma.filled( grid['AngleCS'][:,:], numpy.nan ).astype( numpy.float32 ),
+                'angleSN' : numpy.ma.filled( grid['AngleSN'][:,:], numpy.nan ).astype( numpy.float32 ),
+                'hfac'    : numpy.ma.filled( grid['HFacC'][:,:], numpy.nan ).astype( numpy.float32 ) 
             } 
         )
     
@@ -37,9 +34,9 @@ def load_CS_data(path, var, time, level=None):
     for i in range(6):
         with netCDF4.Dataset(path+'state.0000000000.t00'+str(i+1)+'.nc', 'r') as ds:
             if level is None:
-                arr = np.ma.filled( ds[var][time,:,:], np.nan ).astype( np.float32 )
+                arr = numpy.ma.filled( ds[var][time,:,:], numpy.nan ).astype( numpy.float32 )
             else:
-                arr = np.ma.filled( ds[var][time,level,:,:], np.nan ).astype( np.float32 )
+                arr = numpy.ma.filled( ds[var][time,level,:,:], numpy.nan ).astype( numpy.float32 )
         
         data_CS.append( arr )
     
@@ -63,16 +60,16 @@ def mask_CS_data(level, grid_CS, *args):
     
     for i, mask in enumerate( masks ):
         for f in args:
-            f[i][mask] = np.nan
+            f[i][mask] = numpy.nan
 
 def build_LL_grid(res):
-    lon_b = np.arange(-180.0, 180.0+res, res).astype( np.float32 )
-    lat_b = np.arange(-90.0,   90.0+res, res).astype( np.float32 )
+    lon_b = numpy.arange(-180.0, 180.0+res, res).astype( numpy.float32 )
+    lat_b = numpy.arange(-90.0,   90.0+res, res).astype( numpy.float32 )
     
     lon = ( lon_b[:-1] + lon_b[1:] ) / 2
     lat = ( lat_b[:-1] + lat_b[1:] ) / 2
     
-    lon2d, lat2d = np.meshgrid( lon, lat )
+    lon2d, lat2d = numpy.meshgrid( lon, lat )
     
     gc.collect(); return {  'lon'   : lon,
                             'lat'   : lat,
@@ -83,14 +80,14 @@ def build_LL_grid(res):
 
 def build_regridder(grid_CS, grid_LL, path, use_weights, method):
     regridders  = []
-    weights_dir = f'{path}xeweights'
+    weights_dir = f'{path}xesmfweights'
     
     os.makedirs( weights_dir, exist_ok=True )
     reuse_weights = use_weights and all( os.path.exists(f'{weights_dir}/wght.t00{i+1}.nc') for i in range(6) )
     
     for i in range(6):
         regridders.append( 
-            xe.Regridder( 
+            xesmf.Regridder( 
                 ds_in=grid_CS[i],
                 ds_out=grid_LL,
                 method=method,
@@ -103,61 +100,40 @@ def build_regridder(grid_CS, grid_LL, path, use_weights, method):
     return regridders
 
 def regrid(regridder, data_CS, grid_LL):
-    data_out = np.full( ( grid_LL['lat'].size, 
-                          grid_LL['lon'].size), np.nan, dtype=np.float32 )
+    data_out = numpy.full( ( grid_LL['lat'].size, 
+                          grid_LL['lon'].size), numpy.nan, dtype=numpy.float32 )
     
     for i in range(6):
         data = regridder[i]( data_CS[i], skipna=True )
-        mask = ~np.isnan( data )
+        mask = ~numpy.isnan( data )
         data_out[mask] = data[mask]
     
     gc.collect(); return data_out
 
-def export_cmap_to_cpt(cpallete, cfile, **kwargs):
-    cmap = plt.get_cmap(cpallete, 255)
+def data_to_fig(x, y, z, proj, frame, outf, cpallete, saturation=None):
+    fig = pygmt.Figure()
     
-    b = np.array(kwargs.get('B', cmap(0.)))
-    f = np.array(kwargs.get('F', cmap(1.)))
-    
-    na = np.array(kwargs.get('N', (0,0,0))).astype(float)
-    
-    ext = (np.c_[b[:3],f[:3],na[:3]].T*255).astype(int)
-    extstr = 'B {:3d} {:3d} {:3d}\nF {:3d} {:3d} {:3d}\nN {:3d} {:3d} {:3d}'
-    
-    cols = (cmap(np.linspace(0.,1.,255))[:,:3]*255).astype(int)
-    vals = np.linspace(-1,+1,255)
-    
-    np.savetxt( cfile, 
-                np.c_[vals[:-1],cols[:-1],vals[1:],cols[1:]], 
-                fmt      = '%e %3d %3d %3d %e %3d %3d %3d', 
-                header   = '# COLOR_MODEL = RGB', 
-                footer   = extstr.format(*list(ext.flatten())), 
-                comments = '' )
-
-def data_to_fig(x, y, z, proj, frame, cmap, outf, saturation=None, interval=None, cpallete='vik'):
-    fig = pg.Figure()
-    
-    pg.config( MAP_FRAME_PEN='1.0p,black' )
-    pg.config( MAP_GRID_PEN='0.5p,gray60')
+    pygmt.config( MAP_FRAME_PEN='1.0p,black' )
+    pygmt.config( MAP_GRID_PEN='0.5p,gray60')
 
     if (saturation is not None):
-        pg.makecpt( cmap = cpallete, 
-                    series = [-saturation * np.max( np.abs(z) ), saturation * np.max( np.abs(z) ) ],
+        pygmt.makecpt( cmap = cpallete, 
+                    series = [-saturation * numpy.max( numpy.abs(z) ), saturation * numpy.max( numpy.abs(z) ) ],
                     background = True )
     else:
-        pg.makecpt( cmap = cpallete, 
-                    series = [-np.max( np.abs(z) ), +np.max( np.abs(z) )],
+        pygmt.makecpt( cmap = cpallete, 
+                    series = [-numpy.max( numpy.abs(z) ), +numpy.max( numpy.abs(z) )],
                     background = True )
     
     region = [ x.min(), x.max(),
                y.min(), y.max() ]
     
-    spacing = [ np.abs( x[1,0] - x[0,0] ),
-                np.abs( y[0,1] - y[0,0] ) ]
+    spacing = [ numpy.abs( x[1,0] - x[0,0] ),
+                numpy.abs( y[0,1] - y[0,0] ) ]
     
-    grid = pg.xyz2grd( x = np.ravel(x),
-                       y = np.ravel(y),
-                       z = np.ravel(z),
+    grid = pygmt.xyz2grd( x = numpy.ravel(x),
+                       y = numpy.ravel(y),
+                       z = numpy.ravel(z),
                        spacing = spacing,
                        region = region )
     
@@ -169,43 +145,26 @@ def data_to_fig(x, y, z, proj, frame, cmap, outf, saturation=None, interval=None
     fig.show()
 
 def gmt_LL(grid_LL, data_LL):
-    x, y = np.meshgrid( grid_LL['lon']+180,
+    x, y = numpy.meshgrid( grid_LL['lon']+180,
                         grid_LL['lat'], indexing='ij')
     
-    z = np.nan_to_num( np.transpose(data_LL), nan=0 )
+    z = numpy.nan_to_num( numpy.transpose(data_LL), nan=0 )
     
     data_to_fig( x=x,
                  y=y,
                  z=z,
                  proj='W180/12',
                  frame=['WSne', 'g30', 'ya30'],
-                 cmap='mycmap.cpt',
-                 outf='gmtplot.pdf')
-
-def plt_LL(grid_LL, data_LL):
-    pmax = np.nanmax(np.abs(data_LL))
-
-    fig = plt.figure(figsize=[3, 2])
-    ax = plt.axes(projection=ccrs.PlateCarree())
-    pcm = ax.pcolormesh(grid_LL['lon'], grid_LL['lat'], data_LL, shading='auto', cmap=cmc.vik, vmin=-pmax, vmax=pmax)
-    ax.set_xlabel('Longitude (°)')
-    ax.set_ylabel('Latitude (°)')
-    ax.set_yticks(np.arange(-90, 91, 30), crs=ccrs.PlateCarree())
-    ax.yaxis.set_major_formatter(LatitudeFormatter())
-    gl = ax.gridlines(draw_labels=False)
-    gl.top_labels = True
-    gl.right_labels = True
-    plt.colorbar(pcm, ax=ax)
-    
-    plt.show()
+                 outf='gmtplot.pdf',
+                 cpallete='vik' )
 
 if __name__ == '__main__':
     #####################################################################
     ## Time and radial points of interest.                             ##
     #####################################################################
-    path        = 'state/ridge_20km_cs32x32x20/'
-    irad        = 15
-    itime       = 100
+    path  = 'state/ridge_20km_cs32x32x20/'
+    irad  = 15
+    itime = 100
     
     #####################################################################
     ## Resolution of the regrid and whether use weights. Should be set ##
@@ -213,7 +172,7 @@ if __name__ == '__main__':
     ## different method for interpolation.                             ##
     #####################################################################
     resolution  = 2.
-    use_weights = False
+    use_weights = True
     method      = 'conservative'
     
     #####################################################################
@@ -250,5 +209,4 @@ if __name__ == '__main__':
     #####################################################################
     ## Plotting data.                                                  ##
     #####################################################################
-    #plt_LL( grid_LL, U_LL )
     gmt_LL( grid_LL, U_LL )
