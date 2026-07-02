@@ -2,6 +2,7 @@ import warnings; warnings.filterwarnings( 'ignore', message='.*ESMF and ESMPy.*'
 
 import os
 import sys
+import subprocess
 import gc
 import netCDF4
 import pygmt
@@ -71,12 +72,12 @@ def build_LL_grid(res):
     
     lon2d, lat2d = numpy.meshgrid( lon, lat )
     
-    gc.collect(); return {  'lon'   : lon,
-                            'lat'   : lat,
-                            'lon_b' : lon_b,
-                            'lat_b' : lat_b,
-                            'lon2d' : lon2d,
-                            'lat2d' : lat2d }
+    gc.collect(); return { 'lon'   : lon,
+                           'lat'   : lat,
+                           'lon_b' : lon_b,
+                           'lat_b' : lat_b,
+                           'lon2d' : lon2d,
+                           'lat2d' : lat2d }
 
 def build_regridder(grid_CS, grid_LL, path, use_weights, method):
     regridders  = []
@@ -101,7 +102,7 @@ def build_regridder(grid_CS, grid_LL, path, use_weights, method):
 
 def regrid(regridder, data_CS, grid_LL):
     data_out = numpy.full( ( grid_LL['lat'].size, 
-                          grid_LL['lon'].size), numpy.nan, dtype=numpy.float32 )
+                             grid_LL['lon'].size), numpy.nan, dtype=numpy.float32 )
     
     for i in range(6):
         data = regridder[i]( data_CS[i], skipna=True )
@@ -110,7 +111,7 @@ def regrid(regridder, data_CS, grid_LL):
     
     gc.collect(); return data_out
 
-def data_to_fig(x, y, z, proj, frame, outf, cpallete, maxmin=None):
+def data_to_fig(x, y, z, proj, frame, outf, cpallete, maxmin, namefig):
     fig = pygmt.Figure()
     
     pygmt.config( MAP_FRAME_PEN='1.0p,black' )
@@ -122,8 +123,8 @@ def data_to_fig(x, y, z, proj, frame, outf, cpallete, maxmin=None):
                        background = True )
     else:
         pygmt.makecpt( cmap = cpallete, 
-                       series = [-numpy.max( numpy.abs(z) ), +numpy.max( numpy.abs(z) )],
-                       background = True )
+                    series = [-numpy.max( numpy.abs(z) ), +numpy.max( numpy.abs(z) )],
+                    background = True )
     
     region = [ x.min(), x.max(),
                y.min(), y.max() ]
@@ -132,21 +133,26 @@ def data_to_fig(x, y, z, proj, frame, outf, cpallete, maxmin=None):
                 numpy.abs( y[0,1] - y[0,0] ) ]
     
     grid = pygmt.xyz2grd( x = numpy.ravel(x),
-                       y = numpy.ravel(y),
-                       z = numpy.ravel(z),
-                       spacing = spacing,
-                       region = region )
+                          y = numpy.ravel(y),
+                          z = numpy.ravel(z),
+                          spacing = spacing,
+                          region = region )
+    
+    fig.colorbar( position='JMR+w6c/0.4c+v+o-2c/-4.5c', frame=['a', '+lcm/s'] )
     
     fig.grdimage( region = region,
                   projection = proj,
                   frame = frame,
                   grid = grid )
     
-    fig.show()
+    if ( namefig is not None ):
+        fig.savefig( namefig )
+    else:
+        fig.show()
 
-def gmt_LL(grid_LL, data_LL):
+def gmt_LL(grid_LL, data_LL, maxmin=None, namefig=None):
     x, y = numpy.meshgrid( grid_LL['lon']+180,
-                        grid_LL['lat'], indexing='ij')
+                           grid_LL['lat'], indexing='ij')
     
     z = numpy.nan_to_num( numpy.transpose(data_LL), nan=0 )
     
@@ -154,18 +160,20 @@ def gmt_LL(grid_LL, data_LL):
                  y=y,
                  z=z,
                  proj='W180/12',
-                 frame=['WSne', 'g30', 'ya30'],
+                 frame=['WSne+t '+namefig, 'g30', 'ya30'],
                  outf='gmtplot.pdf',
-                 cpallete='vik' )
+                 cpallete='vik',
+                 maxmin=maxmin,
+                 namefig=namefig )
 
 if __name__ == '__main__':
-    #####################################################################
-    ## Time and radial points of interest.                             ##
-    #####################################################################
-    #path  = 'state/ridge_20km_cs32x32x20/'
-    path  = 'state/flat_cs32x32x20/'
+    ######################################################################
+    ### Time and radial points of interest.                             ##
+    ######################################################################
+    path  = 'state/ridge_20km_cs32x32x20/'
+    #path  = 'state/flat_cs32x32x20/'
     irad  = 15
-    itime = 21
+    ntime = 101
     
     #####################################################################
     ## Resolution of the regrid and whether use weights. Should be set ##
@@ -173,7 +181,7 @@ if __name__ == '__main__':
     ## different method for interpolation.                             ##
     #####################################################################
     resolution  = 2.
-    use_weights = False
+    use_weights = True
     method      = 'conservative'
     
     #####################################################################
@@ -191,20 +199,47 @@ if __name__ == '__main__':
     #####################################################################
     ## Loading, masking and regridding data.                           ##
     #####################################################################
-    data_Eta = load_CS_data( path, 'Eta', time=itime )
-    data_W   = load_CS_data( path, 'W', time=itime, level=irad )
-    data_U, \
-    data_V   = rotate_CS_data( load_CS_data( path, 'U', time=itime, level=irad ), 
-                               load_CS_data( path, 'V', time=itime, level=irad ), grid_CS )
+    Eta_LL = []
+    U_LL   = []
+    V_LL   = []
+    W_LL   = []
     
-    mask_CS_data( irad, grid_CS, data_W, data_U, data_V )
+    for itime in range(ntime+1):
+        data_Eta = load_CS_data( path, 'Eta', time=itime )
+        data_W   = load_CS_data( path, 'W', time=itime, level=irad )
+        data_U, \
+        data_V   = rotate_CS_data( load_CS_data( path, 'U', time=itime, level=irad ), 
+                                   load_CS_data( path, 'V', time=itime, level=irad ), grid_CS )
+        
+        mask_CS_data( irad, grid_CS, data_W, data_U, data_V )
+        
+        Eta_LL.append( regrid( regridder, data_Eta, grid_LL ) )
+        U_LL.append( 100 * regrid( regridder, data_U, grid_LL ) )
+        V_LL.append( 100 * regrid( regridder, data_V, grid_LL ) )
+        W_LL.append( 100 * regrid( regridder, data_W, grid_LL ) )
+        
+        gc.collect()
     
-    Eta_LL = regrid( regridder, data_Eta, grid_LL )
-    U_LL   = 100 * regrid( regridder, data_U, grid_LL )
-    V_LL   = 100 * regrid( regridder, data_V, grid_LL )
-    W_LL   = 100 * regrid( regridder, data_W, grid_LL )
+    Umaxmin = 0
+    for itime in range(ntime+1):
+        Umaxmin = max( Umaxmin, numpy.max( numpy.abs( U_LL[itime] ) ) )
     
     #####################################################################
     ## Plotting data.                                                  ##
     #####################################################################
-    gmt_LL( grid_LL, U_LL )
+    for itime in range(ntime+1):
+        gmt_LL( grid_LL, U_LL[itime], maxmin=Umaxmin, namefig='U'+str(itime)+'.png' )
+        gc.collect()
+    
+    subprocess.run(
+        [ "ffmpeg",
+          "-y",
+          "-framerate", "10",
+          "-start_number", "0",
+          "-i", "U%d.png",
+          "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
+          "-c:v", "libx264",
+          "-pix_fmt", "yuv420p",
+          "movie.mp4",
+        ], check=True
+    )
