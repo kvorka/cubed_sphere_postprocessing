@@ -2,14 +2,14 @@
 from pylib.cs import build_CS_grid, load_CS_data, rotate_CS_data, mask_CS_data
 from pylib.ll import build_LL_grid
 from pylib.xe import build_regridder, regrid
-from pylib.gm import gmt_LL
+from pylib.gm import gmt_load
 
 #####################################################################
 ## Time and radial points of interest.                             ##
 #####################################################################
-#path  = 'state/ridge_20km_cs32x32x20/'
-path  = 'state/flat_cs32x32x20/'
-irad  = 15
+path  = 'state/ridge_20km_cs32x32x20/'
+#path  = 'state/flat_cs32x32x20/'
+irad  = 17
 itime = 21
 
 #####################################################################
@@ -26,6 +26,11 @@ method      = 'conservative'
 #####################################################################
 grid_LL  = build_LL_grid( resolution )
 grid_CS  = build_CS_grid( path )
+
+#####################################################################
+## Preparing plotting for the defined output grid.                 ##
+#####################################################################
+gmtPlotter = gmt_load( grid_LL )
 
 #####################################################################
 ## Building regridder.                                             ##
@@ -52,4 +57,4 @@ W_LL   = 100 * regrid( regridder, data_W, grid_LL )
 #####################################################################
 ## Plotting data.                                                  ##
 #####################################################################
-gmt_LL( grid_LL, U_LL )
+gmtPlotter.plot( U_LL, namefig='U' )

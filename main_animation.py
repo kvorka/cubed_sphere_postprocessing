@@ -3,7 +3,7 @@ import gc
 from pylib.cs import build_CS_grid, load_CS_data, rotate_CS_data, mask_CS_data
 from pylib.ll import build_LL_grid
 from pylib.xe import build_regridder, regrid
-from pylib.gm import gmt_LL, max_in_list
+from pylib.gm import gmt_load
 from pylib.an import make_animation
 
 ######################################################################
@@ -26,8 +26,13 @@ method      = 'conservative'
 #####################################################################
 ## Preparing grid information.                                     ##
 #####################################################################
-grid_LL  = build_LL_grid( resolution )
-grid_CS  = build_CS_grid( path )
+grid_LL = build_LL_grid( resolution )
+grid_CS = build_CS_grid( path )
+
+#####################################################################
+## Preparing plotting for the defined output grid.                 ##
+#####################################################################
+gmtPlotter = gmt_load( grid_LL )
 
 #####################################################################
 ## Building regridder.                                             ##
@@ -59,13 +64,9 @@ for itime in range(ntime+1):
     
     gc.collect()
 
-Umaxmin = max_in_list( U_LL )
-
 #####################################################################
 ## Plotting data.                                                  ##
 #####################################################################
-for itime in range(ntime+1):
-    gmt_LL( grid_LL, U_LL[itime], maxmin=Umaxmin, namefig='U'+str(itime)+'.png' )
-    gc.collect()
+gmtPlotter.plot( U_LL, namefig='Zonal velocity' )
 
-make_animation( 'U', 'movie-U.mp4' )
+make_animation( 'Zonal velocity ', 'movie-zon.mp4' )
