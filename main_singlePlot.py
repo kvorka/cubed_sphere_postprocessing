@@ -8,7 +8,7 @@ from pylib.gmt import gmt_load
 ## Time and radial points of interest.                             ##
 #####################################################################
 path  = 'state/ridge_20km_cs32x32x20/'
-irad  = 17
+irad  = 15
 itime = 100
 
 #####################################################################
@@ -20,7 +20,7 @@ itime = 100
 grd          = grd_load( path2cs = path, resolve = 2. )
 csLoader     = cbs_load( path2cs = path )
 gmtPlotter   = gmt_load( grid_LL = grd.LL )
-xmfRegridder = xmf_load( grid_CS = grd.CS, grid_LL = grd.LL, path = path, use_weights = 'False', method = 'conservative' )
+xmfRegridder = xmf_load( grid_CS = grd.CS, grid_LL = grd.LL, path = path, use_weights = False, method = 'conservative' )
 
 #####################################################################
 ## Loading, masking and regridding data.                           ##
@@ -41,4 +41,4 @@ W_LL   = xmfRegridder.regrid( data_W ) * 100
 #####################################################################
 ## Plotting data.                                                  ##
 #####################################################################
-gmtPlotter.plot( U_LL )
+gmtPlotter.vplot( U_LL, V_LL )
