@@ -8,7 +8,7 @@ from pylib.gmt import gmt_load
 #####################################################################
 ## Time and radial points of interest.                             ##
 #####################################################################
-irad  = 15
+irad  = 17
 itime = 100
 
 #####################################################################
@@ -42,7 +42,7 @@ W_LL   = [ xmfRegridder.regrid( W ) * 100 ]
 #####################################################################
 ## Plotting data.                                                  ##
 #####################################################################
-gmtPlotter.plot( U_LL, namefig=f'Azimuthal velocity, T={itime}' )
-gmtPlotter.plot( V_LL, namefig=f'Meridional velocity, T={itime}' )
-gmtPlotter.plot( W_LL, namefig=f'Vertical velocity, T={itime}' )
-gmtPlotter.vplot( U_LL, V_LL, namefig=f'Horizontal speed, T={itime}' )
+gmtPlotter.plot( U_LL, namefig=f'Azimuthal velocity' )
+gmtPlotter.plot( V_LL, namefig=f'Meridional velocity' )
+gmtPlotter.plot( W_LL, namefig=f'Vertical velocity' )
+gmtPlotter.vplot( U_LL, V_LL, namefig=f'Horizontal speed' )
