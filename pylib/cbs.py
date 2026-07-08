@@ -9,6 +9,20 @@ class cbs_load:
         for i in range(6):
             self.tiles.append( netCDF4.Dataset(path2cs+'state.0000000000.t00'+str(i+1)+'.nc', 'r') )
     
+    def check(self, *args):
+        for var in args:
+            *leading, nlat, nlon = self.tiles[0][var].shape
+            
+            print( f'Variable: {var}' )
+            print( f'Time levels: {leading[0]}' )
+            
+            if len( leading ) == 2:
+                print( f'Radial levels: {leading[1]}' )
+            
+            print(f'Single tile lats: {nlat}')
+            print(f'Single tile lons: {nlon}')
+            print()
+    
     def load(self, var, time, level=None):
         data_CS = []
         
@@ -41,3 +55,14 @@ class cbs_load:
         for i, mask in enumerate( masks ):
             for f in args:
                 f[i][mask] = numpy.nan
+    
+    def load2(self, time, level, grid_CS):
+        data_Eta = self.load( 'Eta', time=time )
+        data_W   = self.load( 'W', time=time, level=level )
+        data_U, \
+        data_V   = self.rotate( self.load( 'U', time=time, level=level ), 
+                                self.load( 'V', time=time, level=level ), grid_CS )
+        
+        self.mask( level, grid_CS, data_W, data_U, data_V )
+        
+        return data_Eta, data_W, data_U, data_V

@@ -70,7 +70,25 @@ class gmt_load:
                   style = 'v0.20c+e+a25',
                   pen   = '0.75p,black' )
     
+    def name_fig(self, fout, series, index):
+        if fout is not None and series:
+            return f'{fout} T={index}'
+        elif fout is not None:
+            return f'{fout}'
+        else:
+            return None
+    
+    def save_fig(self, fig, fout, series, index):
+        if fout is None: 
+            fig.show( dpi=1000 )
+        elif not series:
+            fig.savefig( f'{fout}.png', dpi=1000 )
+        else:
+            fig.savefig( f'{fout} {i}.png', dpi=1000 )
+    
     def plot(self, data, namefig=None):
+        series = ( False if len( data ) == 1 else True )
+        
         valmax = self.prepare_rng( data1 = data )
         
         for i in range( len(data) ):
@@ -81,16 +99,20 @@ class gmt_load:
             
             self.grid_image( fig  = fig, 
                              grid = grid, 
-                             fout = f'{namefig} T={i}' if namefig is not None else None )
+                             fout = self.name_fig( fout   = namefig, 
+                                                   series = series, 
+                                                   index  = i ) )
             
-            if namefig is None: 
-                fig.show()
-            else:
-                fig.savefig(f'{namefig} {i}.png')
+            self.save_fig( fig    = fig,
+                           fout   = namefig,
+                           series = series,
+                           index  = i )
             
             gc.collect()
     
     def vplot(self, dataU, dataV, namefig=None):
+        series = ( False if len( dataU ) == 1 else True )
+        
         valmax = self.prepare_rng( data1 = dataU, 
                                    data2 = dataV )
         
@@ -106,15 +128,17 @@ class gmt_load:
             
             self.grid_image( fig  = fig, 
                              grid = grid, 
-                             fout = f'{namefig} T={i}' if namefig is not None else None )
+                             fout = self.name_fig( fout   = namefig, 
+                                                   series = series, 
+                                                   index  = i ) )
             
             self.quiv_image( fig   = fig, 
                              speed = speed, 
                              angle = angle )
             
-            if namefig is None: 
-                fig.show()
-            else:
-                fig.savefig(f'{namefig} {i}.png')
+            self.save_fig( fig    = fig,
+                           fout   = namefig,
+                           series = series,
+                           index  = i )
             
             gc.collect()
