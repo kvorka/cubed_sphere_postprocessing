@@ -22,7 +22,7 @@ itime = 100
 grd          = grd_load( path2cs = path, resolve = 2. )
 csLoader     = cbs_load( path2cs = path )
 gmtPlotter   = gmt_load( grid_LL = grd.LL )
-xmfRegridder = xmf_load( grid_CS = grd.CS, grid_LL = grd.LL, path2cs = path )
+xmfRegridder = xmf_load( grid_CS = grd.CS, grid_LL = grd.LL, path2wg = path )
 
 #####################################################################
 ## Load, rotate and mask.                                          ##
@@ -42,7 +42,7 @@ W_LL   = [ xmfRegridder.regrid( W ) * 100 ]
 #####################################################################
 ## Plotting data.                                                  ##
 #####################################################################
-gmtPlotter.plot( U_LL, namefig='Azimuthal velocity, T=100' )
-gmtPlotter.plot( V_LL, namefig='Meridional velocity, T=100' )
-gmtPlotter.plot( W_LL, namefig='Vertical velocity, T=100' )
-gmtPlotter.vplot( U_LL, V_LL, namefig='Horizontal speed, T=100' )
+gmtPlotter.plot( U_LL, namefig=f'Azimuthal velocity, T={itime}' )
+gmtPlotter.plot( V_LL, namefig=f'Meridional velocity, T={itime}' )
+gmtPlotter.plot( W_LL, namefig=f'Vertical velocity, T={itime}' )
+gmtPlotter.vplot( U_LL, V_LL, namefig=f'Horizontal speed, T={itime}' )

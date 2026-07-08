@@ -7,8 +7,8 @@ import numpy
 import xesmf
 
 class xmf_load:
-    def __init__(self, grid_CS, grid_LL, path2cs, use_weights=True, method='conservative'):
-        weights_dir = f'{path2cs}xesmfweights'
+    def __init__(self, grid_CS, grid_LL, path2wg, use_weights=True, method='conservative'):
+        weights_dir = f'{path2wg}xesmfweights'
         
         os.makedirs( weights_dir, exist_ok=True )
         reuse_weights = use_weights and all( os.path.exists(f'{weights_dir}/wght.t00{i+1}.nc') for i in range(6) )
