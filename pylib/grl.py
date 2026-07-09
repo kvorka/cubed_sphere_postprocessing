@@ -4,10 +4,10 @@ import netCDF4
 
 class grd_load:
     def __init__(self, path2cs, resolve):
-        self.build_CS_grid( path2cs )
+        self.load_CS_grid( path2cs )
         self.build_LL_grid( resolve )
     
-    def build_CS_grid(self, path2cs):
+    def load_CS_grid(self, path2cs):
         self.CS = []
         
         for i in range(6):

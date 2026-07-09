@@ -8,7 +8,7 @@ class gmt_load:
         self.frameW    = ['WSne', 'g30', 'ya30']
         self.cpallete  = 'vik'
         self.cpallete2 = 'nuuk'
-        self.vstride   = 5
+        self.vstride   = 8
         
         pygmt.config( MAP_FRAME_PEN = '1.0p,black',
                       MAP_GRID_PEN  = '0.5p,gray60' )
@@ -73,8 +73,8 @@ class gmt_load:
     def name_fig(self, fout, series, index):
         if fout is not None and series:
             return f'{fout} T={index}'
-        elif fout is not None:
-            return f'{fout}'
+        #elif fout is not None:
+        #    return f'{fout}'
         else:
             return None
     

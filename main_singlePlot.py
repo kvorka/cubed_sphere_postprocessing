@@ -1,15 +1,15 @@
 
 from pylib.pth import path
 from pylib.cbs import cbs_load
-from pylib.grd import grd_load
+from pylib.grl import grd_load
 from pylib.xmf import xmf_load
 from pylib.gmt import gmt_load
 
 #####################################################################
 ## Time and radial points of interest.                             ##
 #####################################################################
-irad  = 17
-itime = 100
+irad  = 15
+itime = 200
 
 #####################################################################
 ## Preparing grid information about the cubed-sphere grid and the  ##

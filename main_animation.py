@@ -1,6 +1,6 @@
 from pylib.pth import path
 from pylib.cbs import cbs_load
-from pylib.grd import grd_load
+from pylib.grl import grd_load
 from pylib.xmf import xmf_load
 from pylib.gmt import gmt_load
 from pylib.ani import make_animation

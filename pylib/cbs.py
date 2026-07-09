@@ -3,13 +3,17 @@ import numpy
 import netCDF4
 
 class cbs_load:
-    def __init__(self, path2cs):
-        self.tiles = []
+    def __init__(self, path2cs, load_monitor=False, load_data=True):
+        if load_data:
+            self.tiles = []
+            
+            for i in range(6):
+                self.tiles.append( netCDF4.Dataset(path2cs+'state.0000000000.t00'+str(i+1)+'.nc', 'r') )
         
-        for i in range(6):
-            self.tiles.append( netCDF4.Dataset(path2cs+'state.0000000000.t00'+str(i+1)+'.nc', 'r') )
-    
-    def check(self, *args):
+        if load_monitor:
+            self.monitor = netCDF4.Dataset(path2cs+'monitor.0000000000.t001.nc', 'r')
+        
+    def check_shapes(self, *args):
         for var in args:
             *leading, nlat, nlon = self.tiles[0][var].shape
             
@@ -22,6 +26,17 @@ class cbs_load:
             print(f'Single tile lats: {nlat}')
             print(f'Single tile lons: {nlon}')
             print()
+    
+    def check_cfl(self):
+        cflU  = numpy.max( numpy.ma.filled( self.monitor['advcfl_uvel_max'] ) )
+        cflV  = numpy.max( numpy.ma.filled( self.monitor['advcfl_vvel_max'] ) )
+        cflW  = numpy.max( numpy.ma.filled( self.monitor['advcfl_wvel_max'] ) )
+        cflWb = numpy.max( numpy.ma.filled( self.monitor['advcfl_W_hf_max'] ) )
+        
+        print( f'Azimuthal cfl: {cflU}' )
+        print( f'Meridional cfl: {cflV}' )
+        print( f'Vertical cfl: {cflW}' )
+        print( f'Vertical cfl with bathymetry: {cflWb}' )
     
     def load(self, var, time, level=None):
         data_CS = []

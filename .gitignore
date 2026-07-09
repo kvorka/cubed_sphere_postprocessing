@@ -2,3 +2,5 @@ state
 __pycache__
 *.png
 *.mp4
+*.nc
+cs*
