@@ -3,7 +3,9 @@ import numpy
 import array
 
 class grd_build:
-    def __init__(self, Rsphere, nx, path2cs, nratio=4, method='conf', ornt='c', prec='d', machine='big'):
+    def __init__(self, path2cs, nx, Rsphere, nratio=4, method='conf', ornt='c', prec='d', machine='big'):
+        calc_geocoords = calc_geocoords_centerpole if ornt == 'c' else calc_geocoords_cornerpole
+        
         nx  += 1
         nxf  = nratio * (nx - 1) + 1
         
@@ -17,20 +19,18 @@ class grd_build:
         idx_c = slice(   nratio//2,  None, nratio )
         idx_d = slice(   None,       None, nratio )
         
-        calc_geocoords = calc_geocoords_centerpole if ornt == 'c' else calc_geocoords_cornerpole
-        
         q      = rescale_coordinate( numpy.linspace( -1., 0., (nxf-1)//2+1 ), method )
         lx, ly = numpy.meshgrid( q, q, indexing='ij' )
         
-        dx, _, E = calc_fvgrid(lx, ly)
+        dx, _, E = calc_fvgrid( lx, ly )  
         
-        dx = numpy.block( [  dx,   dx[:,idx_2]  ] )
-        dx = numpy.block( [ [dx], [dx[idx_1,:]] ] )
-        E  = numpy.block( [   E,    E[:,idx_1]  ] )
-        E  = numpy.block( [ [ E], [ E[idx_1,:]] ] )
+        dx = numpy.concatenate( ( dx,        dx[idx_1,:] ), axis=0 )
+        dx = numpy.concatenate( ( dx[:,:-1], dx[:,idx_2] ), axis=1 )
+        E  = numpy.concatenate( ( E,          E[idx_1,:] ), axis=0 )
+        E  = numpy.concatenate( ( E,          E[:,idx_1] ), axis=1 )
         
-        dxg, dxc, dxf, dxv = reduce_dx( dx, nratio )
-        Ec, Ez, Ev         = reduce_E( E, nratio )
+        dxg, dxc, dxf, dxv = reduce_dx(dx, nratio)
+        Ec, Ez, Ev         = reduce_E(E, nratio)
         
         dyg, dyc, dyf, dyu, Eu = dxg.T, dxc.T, dxf.T, dxv.T, Ev.T
         
@@ -107,6 +107,15 @@ def plane_normal(P1, P2):
     
     return plane / mag
 
+def excess_of_quad(v1, v2, v3, v4):
+    p1 = plane_normal( v1, v2 )
+    p2 = plane_normal( v2, v3 )
+    p3 = plane_normal( v3, v4 )
+    p4 = plane_normal( v4, v1 )
+    
+    return 2 * numpy.pi - ( angle_between_vectors( p2, p1 ) + angle_between_vectors( p3, p2 ) +
+                            angle_between_vectors( p4, p3 ) + angle_between_vectors( p1, p4 ) )
+
 def rotate_about_axis(lx, ly, lz, angle, axis):
     s, c = numpy.sin(angle), numpy.cos(angle)
     
@@ -120,24 +129,57 @@ def rotate_about_axis(lx, ly, lz, angle, axis):
 def map_lonlat2xyz(lon, lat):
     return numpy.cos(lat) * numpy.cos(lon), numpy.cos(lat) * numpy.sin(lon), numpy.sin(lat)
 
+## Old
 def map_xyz2lonlat(x, y, z):
-    return numpy.arctan2(y, x), numpy.arctan2(z, numpy.hypot(x, y))
-
-def WofZ(z):
-    A = [ 1.47713057321600, -0.38183513110512, -0.05573055466344, \
-         -0.01895884801823, -0.00791314396396, -0.00486626515498, \
-         -0.00329250387158, -0.00235482619663, -0.00175869000970, \
-         -0.00135682443774, -0.00107458043205, -0.00086946107050, \
-         -0.00071604933286, -0.00059869243613, -0.00050696402446, \
-         -0.00043418115349, -0.00037537743098, -0.00032745130951, \
-         -0.00028769063795, -0.00025464473946, -0.00022659577923, \
-         -0.00020297175587, -0.00018247947703, -0.00016510295548, \
-         -0.00014967258633, -0.00013660647356, -0.00012466390509, \
-         -0.00011468147908, -0.00010518717478, -0.00009749136078  ]
+    a  = numpy.sqrt( x**2 + y**2 )
+    z1 = z.copy()
     
-    return numpy.polyval( A[::-1], z ) * z
+    kii, mii = numpy.where( a == 0. )
+    
+    z1[kii,mii] = z1[kii,mii] * numpy.inf
+    a[kii,mii]  = 1.
+    
+    lat = numpy.arctan( z1 / a )
+    
+    x1 = x.copy()
+    y1 = y.copy()
+    
+    kii, mii = numpy.where( x == 0. )
+    
+    y1[kii,mii] = numpy.inf
+    x1[kii,mii] = 1.
+    
+    lon = numpy.arctan( y1 / x1 )
+    
+    kx, mx = numpy.where( x < 0. )
+    
+    for i, item in enumerate(kx):
+        if y[kx[i],mx[i]] >= 0.:
+            lon[kx[i],mx[i]] = numpy.pi + lon[kx[i],mx[i]]
+    
+    kx, mx = numpy.where( x <= 0. )
+    
+    for i, item in enumerate(kx):
+        if y[kx[i],mx[i]] < 0.:
+           lon[kx[i],mx[i]] = -numpy.pi + lon[kx[i],mx[i]]
+    
+    return lon,lat
 
 def map_xy2xyz(xi, yi):
+    def WofZ(z):
+        A = [ 1.47713057321600, -0.38183513110512, -0.05573055466344, \
+             -0.01895884801823, -0.00791314396396, -0.00486626515498, \
+             -0.00329250387158, -0.00235482619663, -0.00175869000970, \
+             -0.00135682443774, -0.00107458043205, -0.00086946107050, \
+             -0.00071604933286, -0.00059869243613, -0.00050696402446, \
+             -0.00043418115349, -0.00037537743098, -0.00032745130951, \
+             -0.00028769063795, -0.00025464473946, -0.00022659577923, \
+             -0.00020297175587, -0.00018247947703, -0.00016510295548, \
+             -0.00014967258633, -0.00013660647356, -0.00012466390509, \
+             -0.00011468147908, -0.00010518717478, -0.00009749136078  ]
+        
+        return numpy.polyval( A[::-1], z ) * z
+
     xc = numpy.abs(xi)
     yc = numpy.abs(yi)
     
@@ -260,6 +302,11 @@ def rescale_coordinate(q, method='conf'):
     return Q
 
 def reduce_E(E, nratio):
+    nxf      = E.shape[0] + 1
+    nx       = (nxf-1) // nratio + 1
+    n_blocks = nx - 1
+    n2       = nratio // 2
+    
     def sum_blocks(mat, rows, cols):
         pad_r = max( 0, rows * nratio - mat.shape[0] )
         pad_c = max( 0, cols * nratio - mat.shape[1] )
@@ -269,71 +316,45 @@ def reduce_E(E, nratio):
             
         return mat[:rows*nratio, :cols*nratio].reshape(rows, nratio, cols, nratio).sum(axis=(1, 3))
     
-    nxf      = E.shape[0] + 1
-    nx       = (nxf - 1) // nratio + 1
-    n_blocks = nx - 1
+    Ec = sum_blocks( E, n_blocks, n_blocks)
+    Ev = sum_blocks( numpy.roll( E, n2, axis=1 ), n_blocks, nx )
+    Ez = sum_blocks( numpy.roll( E, (n2,n2), axis=(0, 1)), nx, nx)
     
-    if nratio == 1:
-        Ec = E
-        Ev = ( numpy.roll( Ec, 1, axis=1 ) + Ec ) / 2
-        Ez = ( numpy.roll( Ev, 1, axis=0 ) + Ev ) / 2
-        
-    else:
-        Ec = sum_blocks( E, n_blocks, n_blocks)
-        Ev = sum_blocks( numpy.roll( E, nratio // 2, axis=1 ), n_blocks, nx )
-        Ez = sum_blocks( numpy.roll( E, (nratio // 2, nratio // 2), axis=(0, 1)), nx, nx)
-        
-        for mat in ( Ec, Ez, Ev ):
-            mat[:] = ( mat + mat[::-1,:]) / 4 + ( mat + mat[:, ::-1] ) / 4
-        
-        Ez[ 0, 0] *= 0.75
-        Ez[ 0,-1] *= 0.75
-        Ez[-1, 0] *= 0.75
-        Ez[-1,-1] *= 0.75
-        
+    for mat in ( Ec, Ez, Ev ):
+        mat[:] = ( mat + mat[::-1,:]) / 4 + ( mat + mat[:,::-1] ) / 4
+    
+    Ez[ 0, 0] *= 0.75
+    Ez[ 0,-1] *= 0.75
+    Ez[-1, 0] *= 0.75
+    Ez[-1,-1] *= 0.75
+    
     return Ec, Ez, Ev
 
 def reduce_dx(dx, nratio):
     nxf = dx.shape[1]
+    n2  = nratio // 2
     
-    if nratio == 1:
-        dxg = ( dx )
-        dxf = ( dx[:, :-1] + dx[:, 1:] ) / 2
-        dxv = ( numpy.roll(dx, 1, axis=0) + dx ) / 2
-        dxc = ( numpy.roll(dxf, 1, axis=0) + dxf ) / 2
+    kg = numpy.arange(  0, nxf,   nratio )
+    kc = numpy.arange( n2, nxf,   nratio )
+    jg = numpy.arange(  0, nxf-1, nratio )
+    
+    jc = numpy.append( nxf-n2-1, kc )
+    
+    dxg = dx[ jg[:,None], kg ]
+    dxf = dx[ jg[:,None], kc ]
+    dxc = dx[ jc[:,None], kc ]
+    dxv = dx[ jc[:,None], kg ]
+    
+    for _ in range(1, nratio):
+        jg = numpy.mod( jg+1, nxf-1 )
+        jc = numpy.mod( jc+1, nxf-1 )
         
-        return dxg, dxc, dxf, dxv
-    
-    rows_g = dx.shape[0] // nratio
-    
-    def sum_rows(mat):
-        return mat[:rows_g * nratio,:].reshape(rows_g, nratio, mat.shape[1]).sum(axis=1)
-    
-    dx_g = dx
-    dx_c = numpy.roll(dx, nratio // 2, axis=0)
-    
-    kg = numpy.arange(0, nxf, nratio)
-    kc = numpy.arange(nratio // 2, nxf, nratio)
-    
-    dxg = sum_rows(dx_g)[:,kg]
-    dxf = sum_rows(dx_g)[:,kc]
-    dxc = sum_rows(dx_c)[:,kc]
-    dxv = sum_rows(dx_c)[:,kg]
-    
-    for mat in (dxg, dxc, dxf, dxv):
-        mat[:] = ( mat + mat[::-1, :] ) / 2
-        mat[:] = ( mat + mat[:, ::-1] ) / 2
-    
+        for mat, j, k in ( (dxg,jg,kg), (dxf,jg,kc), (dxc,jc,kc), (dxv,jc,kg) ):
+            mat += dx[ j[:,None], k ]
+            mat  = ( mat + mat[::-1,:] ) / 2
+            mat  = ( mat + mat[:,::-1] ) / 2
+        
     return dxg, dxc, dxf, dxv
-
-def excess_of_quad(v1, v2, v3, v4):
-    p1 = plane_normal( v1, v2 )
-    p2 = plane_normal( v2, v3 )
-    p3 = plane_normal( v3, v4 )
-    p4 = plane_normal( v4, v1 )
-    
-    return 2 * numpy.pi - ( angle_between_vectors( p2, p1 ) + angle_between_vectors( p3, p2 ) +
-                            angle_between_vectors( p4, p3 ) + angle_between_vectors( p1, p4 ) )
 
 def calc_fvgrid(lx,ly):
     nxf = lx.shape[0]
@@ -360,6 +381,7 @@ def calc_fvgrid(lx,ly):
     
     return dx, dy, E
 
+## Is for sure buggy
 def calc_geocoords_cornerpole(lx, ly, tile):
     nx  = lx.shape[0]
     nxf = 2 * nx - 1
@@ -420,53 +442,45 @@ def calc_geocoords_cornerpole(lx, ly, tile):
 
 def calc_geocoords_centerpole(lx, ly, tile):
     nx  = lx.shape[0]
-    idx = slice( nx-1, None, -1 )
+    nxf = 2 * nx - 1
     
-    lx1, ly1, lz1 = map_xy2xyz(lx, ly)
-    lonP, latP    = map_xyz2lonlat(lx1, ly1, lz1)
+    idx1 = slice( None, -1 )
+    idx2 = slice( nx-1, None, -1 )
+    idx3 = slice( None, None, -1 )
+    
+    lx1, ly1, lz1 = map_xy2xyz( lx, ly )
+    lonP, latP    = map_xyz2lonlat( lx1, ly1, lz1 )
     
     latP = ( latP + latP.T ) / 2
     
-    lonP = ( lonP + numpy.pi) % (2 * numpy.pi) - numpy.pi
-    lonP = ( lonP - 1.5 * numpy.pi - lonP.T ) / 2
+    lonP[lonP >= numpy.pi] -= 2 * numpy.pi
+    lonP = ( lonP - 3./2. * numpy.pi - lonP.T ) / 2.
     numpy.fill_diagonal( lonP, -0.75 * numpy.pi )
     
-    latP = numpy.block( [ [latP[:-1,:  ]], [latP[idx,:]] ] )
-    latP = numpy.block( [  latP[:  ,:-1] ,  latP[:,idx]  ] )
-    lonP = numpy.block( [ [lonP[:-1,:  ]], [-numpy.pi - lonP[idx,:]] ] )
-    lonP = numpy.block( [  lonP[:  ,:-1] ,             -lonP[:,idx]  ] )
+    latP = numpy.concatenate( ( latP[idx1,:],           latP[idx2,:] ), axis=0 )
+    latP = numpy.concatenate( ( latP[:,idx1],           latP[:,idx2] ), axis=1 )
+    lonP = numpy.concatenate( ( lonP[idx1,:], -numpy.pi-lonP[idx2,:] ), axis=0 )
+    lonP = numpy.concatenate( ( lonP[:,idx1],          -lonP[:,idx2] ), axis=1 )
     
     lx1, ly1, lz1 = rotate_about_axis( lx1, ly1, lz1, numpy.pi/2, 'x' )
-    lonE, latE = map_xyz2lonlat(lx1, ly1, lz1)
+    lonE, latE    = map_xyz2lonlat( lx1, ly1, lz1 )
     
-    lonE[0,:]  = -0.75 * numpy.pi
+    lonE[0, :] = -0.75 * numpy.pi
     latE[:,-1] = 0.
-    latE[:,0]  = -latP[0:nx,0]
+    latE[:, 0] = -latP[0:nx,0]
     
-    latE = numpy.block( [ [latE[:-1,:  ]], [            latE[idx,:]] ] )
-    latE = numpy.block( [  latE[:  ,:-1] ,             -latE[:,idx]  ] )
-    lonE = numpy.block( [ [lonE[:-1,:  ]], [-numpy.pi - lonE[idx,:]] ] )
-    lonE = numpy.block( [  lonE[:  ,:-1] ,              lonE[:,idx]  ] )
+    latE = numpy.concatenate( ( latE[idx1,:],           latE[idx2,:] ), axis=0 )
+    latE = numpy.concatenate( ( latE[:,idx1],          -latE[:,idx2] ), axis=1 )
+    lonE = numpy.concatenate( ( lonE[idx1,:], -numpy.pi-lonE[idx2,:] ), axis=0 )
+    lonE = numpy.concatenate( ( lonE[:,idx1],           lonE[:,idx2] ), axis=1 )
     
-    if tile == 1:
-        lat = latE
-        lon = lonE - numpy.pi / 2
-        lon = (lon + numpy.pi) % (2 * numpy.pi) - numpy.pi
-    elif tile == 2:
-        lat, lon = latE, lonE
-    elif tile == 3:
-        lat, lon = latP, lonP
-    elif tile == 4:
-        lat = latE[:, ::-1].T
-        lon = lonE.T + numpy.pi / 2
-    elif tile == 5:
-        lat = latE[:, ::-1].T
-        lon = lonE.T + numpy.pi
-    elif tile == 6:
-        lat = -latP
-        lon = lonP[::-1, ::-1].T
-    
-    return lat, lon
+    match tile:
+        case 1: return latE, lonE - numpy.pi * ( 0.5 - 2 * ( lonE <= -numpy.pi/2 ) )
+        case 2: return latE, lonE
+        case 3: return latP, lonP
+        case 4: return latE[:, idx3].T, lonE.T + numpy.pi/2
+        case 5: return latE[:, idx3].T, lonE.T + numpy.pi
+        case 6: return -latP, lonP[idx3, idx3].T
 
 def write_blocks(fout, a, prec, machine):
     a.astype( prec ).transpose().byteswap( sys.byteorder != machine ).tofile( fout )
@@ -476,8 +490,13 @@ def write_tile(file_out, a, prec, machine):
         a.astype( prec ).transpose(2,1,0).byteswap( sys.byteorder != machine ).tofile(fout)
 
 def convertMITgrid(xc, yc, xg, yg, dxc, dyc, dxg, dyg, dxf, dyf, dxv, dyu, rac, raw, ras, raz, newdir, prec, machine):
-    xc, yc, xg, yg, dxc, dyc, dxg, dyg, dxf, dyf, dxv, dyu, rac, raw, ras, raz = map( pad_array, 
-                                   (xc, yc, xg, yg, dxc, dyc, dxg, dyg, dxf, dyf, dxv, dyu, rac, raw, ras, raz) )
+    xc,  yc,  xg,  yg, \
+    dxc, dyc, dxg, dyg, \
+    dxf, dyf, dxv, dyu, \
+    rac, raw, ras, raz  = map( pad_array, (  xc,  yc,  xg,  yg, \
+                                            dxc, dyc, dxg, dyg, \
+                                            dxf, dyf, dxv, dyu, \
+                                            rac, raw, ras, raz  ) )
     
     for arr in (xg, yg, dxv, dyu, raz):
         arr[-1,-1,:] = numpy.nan
@@ -517,7 +536,6 @@ def convertMITgrid(xc, yc, xg, yg, dxc, dyc, dxg, dyg, dxf, dyf, dxv, dyu, rac, 
     all_grids = [xc, yc, dxf, dyf, rac, xg, yg, dxv, dyu, raz, dxc, dyc, raw, ras, dxg, dyg]
     
     for i in range(6):
-        tile_filename = f"{newdir}/tile{i+1:03d}.mitgrid"
-        with open(tile_filename, 'wb') as fout:
+        with open(f"{newdir}/tile{i+1:03d}.mitgrid", 'wb') as fout:
             for grid in all_grids:
-                write_blocks(fout, grid[:,:,i], prec, machine)
+                write_blocks( fout, grid[:,:,i], prec, machine )
