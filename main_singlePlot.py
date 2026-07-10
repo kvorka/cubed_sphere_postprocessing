@@ -8,8 +8,8 @@ from pylib.gmt import gmt_load
 #####################################################################
 ## Time and radial points of interest.                             ##
 #####################################################################
-irad  = 19
-itime = 20
+irad  = 15
+itime = 200
 
 #####################################################################
 ## Preparing grid information about the cubed-sphere grid and the  ##

@@ -4,140 +4,87 @@ import array
 
 class grd_build:
     def __init__(self, Rsphere, nx, path2cs, nratio=4, method='conf', ornt='c', prec='d', machine='big'):
-        nx  = nx + 1
-        nxf = nratio * (nx - 1) + 1
+        nx  += 1
+        nxf  = nratio * (nx - 1) + 1
         
-        q = numpy.linspace( -1., 0., (nxf - 1) // 2 + 1 )
-        q = rescale_coordinate( q, method )
-        lx, ly = numpy.meshgrid(q, q, indexing='ij')
+        idx = slice( 0, nx-1 )
         
-        dx, dy, E = calc_fvgrid(lx, ly)
-        del dy
+        idx_1 = slice( (nxf-1)//2-1, None, -1 )
+        idx_2 = slice( (nxf+1)//2-1, None, -1 )
         
-        dx = numpy.concatenate( ( dx, dx[(nxf - 1) // 2 - 1::-1,:]),         axis=0 )
-        dx = numpy.concatenate( ( dx[:,:-1], dx[:, (nxf + 1) // 2 - 1::-1]), axis=1 )
-        E  = numpy.concatenate( ( E, E[(nxf - 1) // 2 - 1::-1, :]),          axis=0 )
-        E  = numpy.concatenate( ( E, E[:, (nxf - 1) // 2 - 1::-1]),          axis=1 )
+        idx_p = slice( 1+nratio//2,  None, nratio )
+        idx_m = slice(   nratio//2-1, -2,  nratio )
+        idx_c = slice(   nratio//2,  None, nratio )
+        idx_d = slice(   None,       None, nratio )
         
-        dxg, dxc, dxf, dxv = reduce_dx(dx, nratio)
-        Ec, Ez, Ev = reduce_E(E, nratio)
-        del dx, E
+        calc_geocoords = calc_geocoords_centerpole if ornt == 'c' else calc_geocoords_cornerpole
         
-        dyg = dxg.transpose()
-        dyc = dxc.transpose()
-        dyf = dxf.transpose()
-        dyu = dxv.transpose()
-        Eu  = Ev.transpose()
+        q      = rescale_coordinate( numpy.linspace( -1., 0., (nxf-1)//2+1 ), method )
+        lx, ly = numpy.meshgrid( q, q, indexing='ij' )
         
-        nxf_geo = 2 * lx.shape[0] - 1
-        LatG = numpy.zeros( (nxf_geo, nxf_geo, 6) )
-        LonG = numpy.zeros( (nxf_geo, nxf_geo, 6) )
+        dx, _, E = calc_fvgrid(lx, ly)
+        
+        dx = numpy.block( [  dx,   dx[:,idx_2]  ] )
+        dx = numpy.block( [ [dx], [dx[idx_1,:]] ] )
+        E  = numpy.block( [   E,    E[:,idx_1]  ] )
+        E  = numpy.block( [ [ E], [ E[idx_1,:]] ] )
+        
+        dxg, dxc, dxf, dxv = reduce_dx( dx, nratio )
+        Ec, Ez, Ev         = reduce_E( E, nratio )
+        
+        dyg, dyc, dyf, dyu, Eu = dxg.T, dxc.T, dxf.T, dxv.T, Ev.T
+        
+        LatG = numpy.zeros( ( 2*lx.shape[0]-1, 2*lx.shape[0]-1, 6 ) )
+        LonG = numpy.zeros( ( 2*lx.shape[0]-1, 2*lx.shape[0]-1, 6 ) )
+        
+        for n in range(6):
+            LatG[:,:,n], LonG[:,:,n] = calc_geocoords( lx, ly, n+1 )
         
         if ornt == 'c':
-            for n in range(6):
-                LatG[:, :, n], LonG[:, :, n] = calc_geocoords_centerpole(lx, ly, n + 1)
-            
             LatG = permutetiles(LatG, 2)
             LonG = permutetiles(LonG, 2)
         
-        elif ornt == 'v':
-            for n in range(6): 
-                LatG[:, :, n], LonG[:, :, n] = calc_geocoords_cornerpole(lx, ly, n + 1)
+        Q   = numpy.concatenate( (q[:-1], -q[::-1]) )
+        XYZ = numpy.stack( map_lonlat2xyz( LonG, LatG ), axis=0 )
         
-        if nratio != 1:
-            Q = numpy.concatenate((q[:-1], -q[::-1]))
-            qx = Q[1 + nratio // 2::nratio] - Q[nratio // 2 - 1:-2:nratio]
-            
-            QX, QY = numpy.meshgrid(qx, qx, indexing='ij')
-            del qx, Q
-            
-            Xf, Yf, Zf = map_lonlat2xyz(LonG, LatG)
-            
-            dXdx = ( Xf[1+nratio//2::nratio,nratio//2::nratio,:] - Xf[nratio//2-1:-2:nratio,nratio//2::nratio,:] ) / expand_array( QX )
-            dYdx = ( Yf[1+nratio//2::nratio,nratio//2::nratio,:] - Yf[nratio//2-1:-2:nratio,nratio//2::nratio,:] ) / expand_array( QX )
-            dZdx = ( Zf[1+nratio//2::nratio,nratio//2::nratio,:] - Zf[nratio//2-1:-2:nratio,nratio//2::nratio,:] ) / expand_array( QX )
-            
-            dXdy = ( Xf[nratio//2::nratio,1+nratio//2::nratio,:] - Xf[nratio//2::nratio,nratio//2-1:-2:nratio,:] ) / expand_array( QY )
-            dYdy = ( Yf[nratio//2::nratio,1+nratio//2::nratio,:] - Yf[nratio//2::nratio,nratio//2-1:-2:nratio,:] ) / expand_array( QY )
-            dZdy = ( Zf[nratio//2::nratio,1+nratio//2::nratio,:] - Zf[nratio//2::nratio,nratio//2-1:-2:nratio,:] ) / expand_array( QY )
-            
-            Q11 = dXdx * dXdx + dYdx * dYdx + dZdx * dZdx
-            Q22 = dXdy * dXdy + dYdy * dYdy + dZdy * dZdy
-            Q12 = dXdx * dXdy + dYdx * dYdy + dZdx * dZdy
-            
-            del Xf, Yf, Zf, QX, QY
+        QX, QY = numpy.meshgrid( Q[idx_p]-Q[idx_m], Q[idx_p]-Q[idx_m], indexing='ij' )
         
-        else:
-            Q11 = Q12 = Q22 = 0.
+        dXYZdx = ( XYZ[:,idx_p,idx_c,:] - XYZ[:,idx_m,idx_c,:] ) / expand_array( QX )
+        dXYZdy = ( XYZ[:,idx_c,idx_p,:] - XYZ[:,idx_c,idx_m,:] ) / expand_array( QY )
         
-        latG = LatG[::nratio,::nratio,:]
-        lonG = LonG[::nratio,::nratio,:]
+        Q11 = numpy.sum( dXYZdx * dXYZdx, axis=0 )
+        Q22 = numpy.sum( dXYZdy * dXYZdy, axis=0 )
+        Q12 = numpy.sum( dXYZdx * dXYZdy, axis=0 )
         
-        if nratio == 1:
-            latC = ( latG[:-1,:-1,:] + latG[1:,:-1,:] + latG[:-1,1:,:] + latG[1:,1:,:] ) / 4
-            lonC = ( lonG[:-1,:-1,:] + lonG[1:,:-1,:] + lonG[:-1,1:,:] + lonG[1:,1:,:] ) / 4
-        else:
-            latC = LatG[nratio//2::nratio,nratio//2::nratio,:]
-            lonC = LonG[nratio//2::nratio,nratio//2::nratio,:]
+        latG = LatG[idx_d,idx_d,:]
+        lonG = LonG[idx_d,idx_d,:]
+        latC = LatG[idx_c,idx_c,:]
+        lonC = LonG[idx_c,idx_c,:]
         
-        del LatG, LonG
+        Xlon, Ylon = -numpy.sin(lonC), +numpy.cos(lonC)
         
-        if nratio != 1:
-            Xlon = -numpy.sin(lonC) 
-            Ylon = +numpy.cos(lonC) 
-            Zlon = 0. * lonC
-            
-            TUu =  ( dXdx * Xlon + dYdx * Ylon + dZdx * Zlon )
-            TVu = -( dXdy * Xlon + dYdy * Ylon + dZdy * Zlon )
-            
-            Xlat = -numpy.sin(latC) * numpy.cos(lonC) 
-            Ylat = -numpy.sin(latC) * numpy.sin(lonC) 
-            Zlat = +numpy.cos(latC)
-            
-            TUv = -( dXdx * Xlat + dYdx * Ylat + dZdx * Zlat )
-            TVv =  ( dXdy * Xlat + dYdy * Ylat + dZdy * Zlat )
-            
-            det = numpy.sqrt(TUu * TVv - TUv * TVu)
-            
-            TUu /= det
-            TUv /= det
-            TVu /= det
-            TVv /= det
-            
-            del dXdx, dXdy, dYdx, dYdy, dZdx, dZdy
+        TUu =  ( dXYZdx[0] * Xlon + dXYZdx[1] * Ylon )
+        TVu = -( dXYZdy[0] * Xlon + dXYZdy[1] * Ylon )
         
-        XG, YG, ZG = map_lonlat2xyz(lonG, latG)
+        Xlat = -numpy.sin(latC) * numpy.cos(lonC) 
+        Ylat = -numpy.sin(latC) * numpy.sin(lonC) 
+        Zlat = +numpy.cos(latC)
         
-        idx = slice(0,nx-1)
+        TUv = -( dXYZdx[0] * Xlat + dXYZdx[1] * Ylat + dXYZdx[2] * Zlat )
+        TVv =  ( dXYZdy[0] * Xlat + dXYZdy[1] * Ylat + dXYZdy[2] * Zlat )
         
-        lonG1, latG1 = lonG[idx,idx,:].copy(), latG[idx,idx,:].copy()
+        det = numpy.sqrt( TUu * TVv - TUv * TVu )
         
-        dxg1, dyg1 = dxg[idx,idx].copy(), dyg[idx,idx].copy()
-        dxf1, dyf1 = dxf[idx,idx].copy(), dyf[idx,idx].copy()
-        dxc1, dyc1 = dxc[idx,idx].copy(), dyc[idx,idx].copy()
-        dxv1, dyu1 = dxv[idx,idx].copy(), dyu[idx,idx].copy()
+        TUu /= det
+        TUv /= det
+        TVu /= det
+        TVv /= det
         
-        Ec1, Eu1, Ev1, Ez1 = Ec[idx,idx].copy(), Eu[idx,idx].copy(), Ev[idx,idx].copy(), Ez[idx,idx].copy()
-        
-        convertMITgrid( numpy.degrees( lonC, ), 
-                        numpy.degrees( latC, ), 
-                        numpy.degrees( lonG1 ), 
-                        numpy.degrees( latG1 ),
-                        Rsphere * expand_array(dxc1),  
-                        Rsphere * expand_array(dyc1),
-                        Rsphere * expand_array(dxg1),  
-                        Rsphere * expand_array(dyg1),
-                        Rsphere * expand_array(dxf1),  
-                        Rsphere * expand_array(dyf1),
-                        Rsphere * expand_array(dxv1),  
-                        Rsphere * expand_array(dyu1),
-                        Rsphere**2 * expand_array(Ec1), 
-                        Rsphere**2 * expand_array(Eu1),
-                        Rsphere**2 * expand_array(Ev1), 
-                        Rsphere**2 * expand_array(Ez1),
-                        path2cs, 
-                        prec, 
-                        machine )
+        convertMITgrid( *[ numpy.degrees( arr ) for arr in (lonC, latC) ],
+                        *[ numpy.degrees( arr[idx,idx,:] ) for arr in (lonG, latG) ],
+                        *[ Rsphere * expand_array( arr[idx,idx] ) for arr in (dxc, dyc, dxg, dyg, dxf, dyf, dxv, dyu) ],
+                        *[ Rsphere**2 * expand_array(arr[idx, idx]) for arr in (Ec, Eu, Ev, Ez) ],
+                        path2cs, prec, machine )
 
 def pad_array(a):
     return numpy.pad( a, ((0, 1), (0, 1), (0, 0)), constant_values=0 )
@@ -160,35 +107,15 @@ def plane_normal(P1, P2):
     
     return plane / mag
 
-def rotate_about_zaxis(lx, ly, lz, angle):
-    s = numpy.sin( angle )
-    c = numpy.cos( angle )
+def rotate_about_axis(lx, ly, lz, angle, axis):
+    s, c = numpy.sin(angle), numpy.cos(angle)
     
-    if c < 1.e-9:
-       c = 0.
-       s = numpy.sign( s )
+    if abs(c) < 1.e-9: 
+        c, s = 0., numpy.sign(s)
     
-    return c*lx-s*ly, s*lx+c*ly, lz.copy()
-
-def rotate_about_yaxis(lx, ly, lz, angle):
-    s = numpy.sin( angle )
-    c = numpy.cos( angle )
-    
-    if c < 1.e-9:
-       c = 0.
-       s = numpy.sign( s )
-    
-    return c*lx+s*lz, ly.copy(), -s*lx+c*lz
-
-def rotate_about_xaxis(lx, ly, lz, angle):
-    s = numpy.sin( angle )
-    c = numpy.cos( angle )
-    
-    if c < 1.e-9:
-       c = 0.
-       s = numpy.sign( s )
-    
-    return lx.copy(), c*ly-s*lz, s*ly+c*lz
+    if axis == 'z': return c*lx-s*ly, s*lx+c*ly, lz.copy()
+    if axis == 'y': return c*lx+s*lz, ly.copy(), -s*lx+c*lz
+    if axis == 'x': return lx.copy(), c*ly-s*lz, +s*ly+c*lz
 
 def map_lonlat2xyz(lon, lat):
     return numpy.cos(lat) * numpy.cos(lon), numpy.cos(lat) * numpy.sin(lon), numpy.sin(lat)
@@ -452,8 +379,8 @@ def calc_geocoords_cornerpole(lx, ly, tile):
     lz1 = numpy.concatenate( ( lz1[:-1, :], lz1[nx-1::-1, :] ), axis=0 ) 
     lz1 = numpy.concatenate( ( lz1[:, :-1], lz1[:, nx-1::-1] ), axis=1 )
     
-    lx1, ly1, lz1 = rotate_about_zaxis( lx1, ly1, lz1, -numpy.pi / 4 )
-    lx1, ly1, lz1 = rotate_about_yaxis( lx1, ly1, lz1, numpy.arctan( numpy.sqrt(2.) ) )
+    lx1, ly1, lz1 = rotate_about_axis( lx1, ly1, lz1, -numpy.pi / 4, 'z' )
+    lx1, ly1, lz1 = rotate_about_axis( lx1, ly1, lz1, numpy.arctan( numpy.sqrt(2.) ), 'y' )
     
     lx1 = ( lx1 + lx1.transpose() ) / 2
     ly1 = ( ly1 - ly1.transpose() ) / 2
@@ -493,53 +420,51 @@ def calc_geocoords_cornerpole(lx, ly, tile):
 
 def calc_geocoords_centerpole(lx, ly, tile):
     nx  = lx.shape[0]
-    nxf = 2 * nx - 1
+    idx = slice( nx-1, None, -1 )
     
     lx1, ly1, lz1 = map_xy2xyz(lx, ly)
     lonP, latP    = map_xyz2lonlat(lx1, ly1, lz1)
     
-    latP = ( latP + latP.transpose() ) / 2
+    latP = ( latP + latP.T ) / 2
     
     lonP = ( lonP + numpy.pi) % (2 * numpy.pi) - numpy.pi
-    lonP = ( lonP - 1.5 * numpy.pi - lonP.transpose() ) / 2
+    lonP = ( lonP - 1.5 * numpy.pi - lonP.T ) / 2
     numpy.fill_diagonal( lonP, -0.75 * numpy.pi )
     
-    latP = numpy.concatenate( ( latP[:-1, :],           latP[nx-1::-1, :] ), axis=0 )
-    latP = numpy.concatenate( ( latP[:, :-1],           latP[:, nx-1::-1] ), axis=1 )
-    lonP = numpy.concatenate( ( lonP[:-1, :], -numpy.pi-lonP[nx-1::-1, :] ), axis=0 )
-    lonP = numpy.concatenate( ( lonP[:, :-1],          -lonP[:, nx-1::-1] ), axis=1 )
+    latP = numpy.block( [ [latP[:-1,:  ]], [latP[idx,:]] ] )
+    latP = numpy.block( [  latP[:  ,:-1] ,  latP[:,idx]  ] )
+    lonP = numpy.block( [ [lonP[:-1,:  ]], [-numpy.pi - lonP[idx,:]] ] )
+    lonP = numpy.block( [  lonP[:  ,:-1] ,             -lonP[:,idx]  ] )
     
-    lx1, ly1, lz1 = rotate_about_xaxis( lx1, ly1, lz1, numpy.pi / 2 )
+    lx1, ly1, lz1 = rotate_about_axis( lx1, ly1, lz1, numpy.pi/2, 'x' )
     lonE, latE = map_xyz2lonlat(lx1, ly1, lz1)
     
     lonE[0,:]  = -0.75 * numpy.pi
     latE[:,-1] = 0.
     latE[:,0]  = -latP[0:nx,0]
     
-    latE = numpy.concatenate( ( latE[:-1, :],           latE[nx-1::-1, :] ), axis=0 )
-    latE = numpy.concatenate( ( latE[:, :-1],          -latE[:, nx-1::-1] ), axis=1 )
-    lonE = numpy.concatenate( ( lonE[:-1, :], -numpy.pi-lonE[nx-1::-1, :] ), axis=0 )
-    lonE = numpy.concatenate( ( lonE[:, :-1],           lonE[:, nx-1::-1] ), axis=1 )
+    latE = numpy.block( [ [latE[:-1,:  ]], [            latE[idx,:]] ] )
+    latE = numpy.block( [  latE[:  ,:-1] ,             -latE[:,idx]  ] )
+    lonE = numpy.block( [ [lonE[:-1,:  ]], [-numpy.pi - lonE[idx,:]] ] )
+    lonE = numpy.block( [  lonE[:  ,:-1] ,              lonE[:,idx]  ] )
     
     if tile == 1:
         lat = latE
         lon = lonE - numpy.pi / 2
         lon = (lon + numpy.pi) % (2 * numpy.pi) - numpy.pi
     elif tile == 2:
-        lat = latE
-        lon = lonE
+        lat, lon = latE, lonE
     elif tile == 3:
-        lat = latP
-        lon = lonP
+        lat, lon = latP, lonP
     elif tile == 4:
-        lat = latE[:,::-1].transpose()
-        lon = lonE.transpose() + numpy.pi / 2
+        lat = latE[:, ::-1].T
+        lon = lonE.T + numpy.pi / 2
     elif tile == 5:
-        lat = latE[:,::-1].transpose()
-        lon = lonE.transpose() + numpy.pi
+        lat = latE[:, ::-1].T
+        lon = lonE.T + numpy.pi
     elif tile == 6:
         lat = -latP
-        lon = lonP[::-1,::-1].transpose()
+        lon = lonP[::-1, ::-1].T
     
     return lat, lon
 
@@ -551,75 +476,43 @@ def write_tile(file_out, a, prec, machine):
         a.astype( prec ).transpose(2,1,0).byteswap( sys.byteorder != machine ).tofile(fout)
 
 def convertMITgrid(xc, yc, xg, yg, dxc, dyc, dxg, dyg, dxf, dyf, dxv, dyu, rac, raw, ras, raz, newdir, prec, machine):
-    xg  = pad_array(xg);   xg[-1,-1,:]  = numpy.nan
-    yg  = pad_array(yg);   yg[-1,-1,:]  = numpy.nan
-    dxv = pad_array(dxv);  dxv[-1,-1,:] = numpy.nan
-    dyu = pad_array(dyu);  dyu[-1,-1,:] = numpy.nan
-    raz = pad_array(raz);  raz[-1,-1,:] = numpy.nan
+    xc, yc, xg, yg, dxc, dyc, dxg, dyg, dxf, dyf, dxv, dyu, rac, raw, ras, raz = map( pad_array, 
+                                   (xc, yc, xg, yg, dxc, dyc, dxg, dyg, dxf, dyf, dxv, dyu, rac, raw, ras, raz) )
     
-    xg[0,-1,[0,2,4]] = xg[0,0,0]
-    xg[-1,0,[1,3,5]] = xg[0,0,3]
-    xg[-1,:,[0,2,4]] = xg[0,:,[1,3,5]]
-    xg[:,-1,[0,2,4]] = xg[0,::-1,[2,4,0]].transpose()
-    xg[-1,:,[1,3,5]] = xg[::-1,0,[3,5,1]].transpose()
-    xg[:,-1,[1,3,5]] = xg[:,0,[2,4,0]]
+    for arr in (xg, yg, dxv, dyu, raz):
+        arr[-1,-1,:] = numpy.nan
     
-    yg[0,-1,[0,2,4]] = yg[0,0,2]
-    yg[-1,0,[1,3,5]] = yg[0,0,5]
-    yg[-1,:,[0,2,4]] = yg[0,:,[1,3,5]]
-    yg[:,-1,[0,2,4]] = yg[0,::-1,[2,4,0]].transpose()
-    yg[-1,:,[1,3,5]] = yg[::-1,0,[3,5,1]].transpose()
-    yg[:,-1,[1,3,5]] = yg[:,0,[2,4,0]]
+    for arr, (t1, t2) in ((xg, (0, 3)), (yg, (2, 5)), (raz, (0, 3))):
+        arr[ 0,-1,[0,2,4]] = arr[0,0,t1]
+        arr[-1, 0,[1,3,5]] = arr[0,0,t2]
+        
+        arr[-1, :,[0,2,4]] = arr[0,:   ,[1, 3, 5]]
+        arr[ :,-1,[0,2,4]] = arr[0,::-1,[2, 4, 0]].transpose()
+        arr[-1, :,[1,3,5]] = arr[::-1,0,[3, 5, 1]].transpose()
+        arr[ :,-1,[1,3,5]] = arr[:,0,[2, 4, 0]]
     
-    raz[0,-1,[0,2,4]] = raz[0,0,0]
-    raz[-1,0,[1,3,5]] = raz[0,0,3]
-    raz[-1,:,[0,2,4]] = raz[0,:,[1,3,5]]
-    raz[:,-1,[0,2,4]] = raz[0,::-1,[2,4,0]].transpose()
-    raz[-1,:,[1,3,5]] = raz[::-1,0,[3,5,1]].transpose()
-    raz[:,-1,[1,3,5]] = raz[:,0,[2,4,0]]
+    dxv[ 0,-1,[0,2,4]] = dxv[0,0,0]
+    dxv[-1, 0,[1,3,5]] = dxv[0,0,3]
+    dyu[ 0,-1,[0,2,4]] = dxv[0,0,0]
+    dyu[-1, 0,[1,3,5]] = dxv[0,0,3]
     
-    dxv[0,-1,[0,2,4]] = dxv[0,0,0]
-    dxv[-1,0,[1,3,5]] = dxv[0,0,3]
-    dyu[0,-1,[0,2,4]] = dxv[0,0,0]
-    dyu[-1,0,[1,3,5]] = dxv[0,0,3]
+    for u, v in ((dxv, dyu), (dyu, dxv)):
+        u[-1, :,[0, 2, 4]] = u[0, :, [1, 3, 5]]
+        u[ :,-1,[0, 2, 4]] = v[0, ::-1, [2, 4, 0]].transpose()
+        u[-1, :,[1, 3, 5]] = v[::-1, 0, [3, 5, 1]].transpose()
+        u[ :,-1,[1, 3, 5]] = u[:, 0, [2, 4, 0]]
     
-    dxv[-1,:,[0,2,4]] = dxv[0,:,[1,3,5]]
-    dxv[:,-1,[0,2,4]] = dyu[0,::-1,[2,4,0]].transpose()
-    dxv[-1,:,[1,3,5]] = dyu[::-1,0,[3,5,1]].transpose()
-    dxv[:,-1,[1,3,5]] = dxv[:,0,[2,4,0]]
+    for arr in (dxc, raw, dyg):
+        arr[-1,:-1,:] = numpy.nan
     
-    dyu[-1,:,[0,2,4]] = dyu[0,:,[1,3,5]]
-    dyu[:,-1,[0,2,4]] = dxv[0,::-1,[2,4,0]].transpose()
-    dyu[-1,:,[1,3,5]] = dxv[::-1,0,[3,5,1]].transpose()
-    dyu[:,-1,[1,3,5]] = dyu[:,0,[2,4,0]]
+    for arr in (dyc, ras, dxg):
+        arr[:-1,-1,:] = numpy.nan
     
-    xc  = pad_array(xc)
-    yc  = pad_array(yc)
-    dxf = pad_array(dxf)
-    dyf = pad_array(dyf)
-    rac = pad_array(rac)
-    
-    dxc = pad_array(dxc); dxc[-1,:-1,:] = numpy.nan
-    dyc = pad_array(dyc); dyc[:-1,-1,:] = numpy.nan
-    raw = pad_array(raw); raw[-1,:-1,:] = numpy.nan
-    ras = pad_array(ras); ras[:-1,-1,:] = numpy.nan
-    dxg = pad_array(dxg); dxg[:-1,-1,:] = numpy.nan
-    dyg = pad_array(dyg); dyg[-1,:-1,:] = numpy.nan
-    
-    dxc[-1,:,[0,2,4]]   = dxc[0,:,[1,3,5]]
-    dxc[-1,:-1,[1,3,5]] = dyc[-2::-1,0,[3,5,1]].transpose()
-    dyc[:,-1,[1,3,5]]   = dyc[:,0,[2,4,0]]
-    dyc[:-1,-1,[0,2,4]] = dxc[0,-2::-1,[2,4,0]].transpose()
-
-    raw[-1,:,[0,2,4]]   = raw[0,:,[1,3,5]]
-    raw[-1,:-1,[1,3,5]] = ras[-2::-1,0,[3,5,1]].transpose()
-    ras[:,-1,[1,3,5]]   = ras[:,0,[2,4,0]]
-    ras[:-1,-1,[0,2,4]] = raw[0,-2::-1,[2,4,0]].transpose()
-
-    dyg[-1,:,[0,2,4]]   = dyg[0,:,[1,3,5]]
-    dyg[-1,:-1,[1,3,5]] = dxg[-2::-1,0,[3,5,1]].transpose()
-    dxg[:,-1,[1,3,5]]   = dxg[:,0,[2,4,0]]
-    dxg[:-1,-1,[0,2,4]] = dyg[0,-2::-1,[2,4,0]].transpose()
+    for x_arr, y_arr in ((dxc, dyc), (raw, ras), (dyg, dxg)):
+        x_arr[-1, :, [0, 2, 4]]   = x_arr[0, :, [1, 3, 5]]
+        x_arr[-1, :-1, [1, 3, 5]] = y_arr[-2::-1, 0, [3, 5, 1]].transpose()
+        y_arr[:, -1, [1, 3, 5]]   = y_arr[:, 0, [2, 4, 0]]
+        y_arr[:-1, -1, [0, 2, 4]] = x_arr[0, -2::-1, [2, 4, 0]].transpose()
     
     all_grids = [xc, yc, dxf, dyf, rac, xg, yg, dxv, dyu, raz, dxc, dyc, raw, ras, dxg, dyg]
     
@@ -627,4 +520,4 @@ def convertMITgrid(xc, yc, xg, yg, dxc, dyc, dxg, dyg, dxf, dyf, dxv, dyu, rac, 
         tile_filename = f"{newdir}/tile{i+1:03d}.mitgrid"
         with open(tile_filename, 'wb') as fout:
             for grid in all_grids:
-                write_blocks(fout, grid[:, :, i], prec, machine)
+                write_blocks(fout, grid[:,:,i], prec, machine)
