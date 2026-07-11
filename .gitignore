@@ -3,4 +3,5 @@ __pycache__
 *.png
 *.mp4
 *.nc
+*.bin
 cs*

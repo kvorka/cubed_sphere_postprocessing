@@ -4,7 +4,7 @@ from pylib.cbs import cbs_load
 #####################################################################
 ## Load dataset of interest.                                       ##
 #####################################################################
-csLoader = cbs_load( path2cs      = 'state/grid_run/',
+csLoader = cbs_load( path2cs      = 'state/grid_bathy/',
                      load_monitor = True,
                      load_data    = True )
 
