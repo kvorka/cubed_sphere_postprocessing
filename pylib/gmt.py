@@ -8,7 +8,8 @@ class gmt_load:
         self.frameW    = ['WSne', 'g30', 'ya30']
         self.cpallete  = 'vik'
         self.cpallete2 = 'nuuk'
-        self.vstride   = 20
+        self.vstride   = 5
+        self.vresc     = 2
         
         pygmt.config( MAP_FRAME_PEN = '1.0p,black',
                       MAP_GRID_PEN  = '0.5p,gray60' )
@@ -66,7 +67,7 @@ class gmt_load:
         fig.plot( x = self.xv,
                   y = self.yv,
                   direction = [ self.prepare_data( angle[::self.vstride,::self.vstride] ), 
-                                self.prepare_data( speed[::self.vstride,::self.vstride] ) / 4 ],
+                                self.prepare_data( speed[::self.vstride,::self.vstride] ) / self.vresc ],
                   style = 'v0.20c+e+a25',
                   pen   = '0.75p,black' )
     
