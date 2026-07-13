@@ -3,15 +3,15 @@ import numpy
 import netCDF4
 
 class grd_load:
-    def __init__(self, path2cs, resolve):
-        self.load_CS_grid( path2cs )
+    def __init__(self, path2cs, ntiles, resolve):
+        self.load_CS_grid( path2cs, ntiles )
         self.build_LL_grid( resolve )
     
-    def load_CS_grid(self, path2cs):
+    def load_CS_grid(self, path2cs, ntiles):
         self.CS = []
         
-        for i in range(6):
-            grid = netCDF4.Dataset( f'{path2cs}grid.t00{i+1}.nc', 'r' )
+        for i in range(ntiles):
+            grid = netCDF4.Dataset( f'{path2cs}grid.t{i+1:03d}.nc', 'r' )
             
             self.CS.append( { 'lon'     : numpy.ma.filled( grid['XC'][:,:], numpy.nan ).astype( numpy.float32 ),
                               'lat'     : numpy.ma.filled( grid['YC'][:,:], numpy.nan ).astype( numpy.float32 ),

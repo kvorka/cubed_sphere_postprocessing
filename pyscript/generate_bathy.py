@@ -1,21 +1,43 @@
 import numpy
+import argparse
 
 #####################################################################################################
 ## Set up of the model.                                                                            ##
 #####################################################################################################
-bathy     = 2        ## 0-flat, 1-Gauss peak, 2-Gauss ridge
-potential = 2        ## 0-obliquity, 1-eccentricity, 2-full tides
-nn        = 32       ## cubed sphere single tile resolution
-nz        = 20       ## number of radial points
-a         = 1561e3   ## radius of the sphere in meters
-H         = -1e5     ## depth of the ocean in meters
-period    = 306806   ## rotation period in  seconds
-obl       = 0.053    ## obliquity
-ecc       = 0.0094   ## eccentricity
-nt        = 25       ## number of steps within a period
-wg        = 10       ## width of the Gaussians in degrees
-hg        = 2e4      ## height of the Gaussians in meters
-prec      = ">f8"    ## Big-endian float64
+parser = argparse.ArgumentParser()
+
+parser.add_argument( '-bathy',     '--bathy',     type=str, choices=['flat', 'peak', 'ridge'], default='flat', help='Bathymetry type'      )
+parser.add_argument( '-potential', '--potential', type=str, choices=['obl', 'ecc', 'full' ],   default='full', help='Tidal potential type' )
+
+parser.add_argument( '-rs',     '--radius', type=float, default=1561.,   help='Sphere radius in km'          )
+parser.add_argument( '-depth' , '--depth',  type=float, default=100.,    help='Ocean depth in km'            )
+parser.add_argument( '-period', '--period', type=float, default=306806., help='Rotational period in seconds' )
+parser.add_argument( '-obl',    '--obl',    type=float, default=0.053,   help='Obliquity in degrees'         )
+parser.add_argument( '-ecc',    '--ecc',    type=float, default=0.0094,  help='Eccentricity'                 )
+
+parser.add_argument( '-nx', '--nx', type=int, default=32, help='CS grid resolution'                  )
+parser.add_argument( '-nz', '--nz', type=int, default=20, help='Radial grid resolution'              )
+parser.add_argument( '-nt', '--nt', type=int, default=25, help='One period resolution for potential' )
+
+parser.add_argument( '-wg', '--wg', type=float, default=10., help='Width of the Gaussian in degrees' )
+parser.add_argument( '-hg', '--hg', type=float, default=20., help='Height of the Gaussian in km'     )
+
+args = parser.parse_args()
+
+bathy     = { 'flat' : 0, 'peak' : 1, 'ridge' : 2 }[args.bathy]
+potential = { 'obl'  : 0, 'ecc'  : 1, 'full'  : 2 }[args.potential]
+
+nn        = args.nx
+nz        = args.nz
+a         = args.radius * ( 1e3)
+H         = args.depth  * (-1e3)
+period    = args.period
+obl       = args.obl
+ecc       = args.ecc
+nt        = args.nt
+wg        = args.wg
+hg        = args.hg * 1e3
+prec      = ">f8"               ## Big-endian float64
 
 #####################################################################################################
 ## Subroutine for saving and reading the binary files.                                             ##

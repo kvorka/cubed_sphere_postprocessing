@@ -1,11 +1,17 @@
 #!/bin/bash
-copy_from="/nfsjk/kvorka/MITgcm-tides-custom/run_cs32x32x20_Ah1e4_Av1e1_ridge/"
-copy_to="state/ridge_run/"
+copy_data() {
+    if [ ! -d "$2" ]; then
+        mkdir -p "$2"
+    fi
+    
+    cp "$1"monitor.0000000000.t* "$2"
+    cp "$1"state.0000000000.t* "$2"
+    cp "$1"grid.t* "$2"
+}
 
-if [ ! -d "$copy_to" ]; then
-    mkdir -p "$copy_to"
-fi
-
-cp "$copy_from"monitor.0000000000.t00* "$copy_to"
-cp "$copy_from"state.0000000000.t00* "$copy_to"
-cp "$copy_from"grid.t00* "$copy_to"
+copy_data "/nfsjk/kvorka/MITgcm-tides-custom/run_exch2/" "state/run_exch2_128x128x50/"
+#copy_data "/nfsjk/kvorka/MITgcm-tides-custom/run_exch2/" "state/run_exch2_32x32/"
+#copy_data "/nfsjk/kvorka/MITgcm-tides-custom/run_cs32x32x20_Ah1e4_Av1e1_ridge/" "state/ridge_32x32x20_Ah1e4_Av1e1/"
+#copy_data "/nfsjk/kvorka/MITgcm-tides-custom/run_cs32x32x20_Ah1e3_Av1e0_ridge/" "state/ridge_32x32x20_Ah1e3_Av1e0/"
+#copy_data "/nfsjk/kvorka/MITgcm-tides-custom/run_cs32x32x20_Ah1e4_Av1e1_flat/" "state/flat_32x32x20_Ah1e4_Av1e1/"
+#copy_data "/nfsjk/kvorka/MITgcm-tides-custom/run_cs32x32x20_Ah1e3_Av1e0_flat/" "state/flat_32x32x20_Ah1e3_Av1e0/"

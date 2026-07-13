@@ -438,12 +438,10 @@ def build_grid(nx, Rsphere, nratio=4, method='conf', ornt='c', prec='d', machine
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     
-    parser.add_argument( '-n', '--n',      type=int,   default=32,    help='CS grid resolution' )
-    parser.add_argument( '-r', '--radius', type=float, default=1561., help='Sphere radius in km' )
+    parser.add_argument( '-nx', '--nx',     type=int,   default=32,    help='CS grid resolution' )
+    parser.add_argument( '-rs', '--radius', type=float, default=1561., help='Sphere radius in km' )
     
     args = parser.parse_args()
     
-    n = args.n
-    r = args.radius * 1e3
-    
-    build_grid( Rsphere = r, nx = n )
+    build_grid( Rsphere = args.radius * 1e3, 
+                nx      = args.nx )

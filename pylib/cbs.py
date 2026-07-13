@@ -3,12 +3,13 @@ import numpy
 import netCDF4
 
 class cbs_load:
-    def __init__(self, path2cs, load_monitor=False, load_data=True):
+    def __init__(self, path2cs, ntiles, load_monitor=False, load_data=True):
         if load_data:
             self.tiles = []
+            self.ntiles = ntiles
             
-            for i in range(6):
-                self.tiles.append( netCDF4.Dataset(path2cs+'state.0000000000.t00'+str(i+1)+'.nc', 'r') )
+            for i in range(self.ntiles):
+                self.tiles.append( netCDF4.Dataset( f'{path2cs}state.0000000000.t{i+1:03d}.nc', 'r' ) )
         
         if load_monitor:
             self.monitor = netCDF4.Dataset(path2cs+'monitor.0000000000.t001.nc', 'r')
@@ -41,7 +42,7 @@ class cbs_load:
     def load(self, var, time, level=None):
         data_CS = []
         
-        for i in range(6):
+        for i in range(self.ntiles):
             if level is None:
                 arr = numpy.ma.filled( self.tiles[i][var][time,:,:], numpy.nan ).astype( numpy.float32 )
             else:
@@ -55,7 +56,7 @@ class cbs_load:
         u_East  = []
         v_North = []
         
-        for i in range(6):
+        for i in range(self.ntiles):
             u_C = ( u_CS[i][:,:-1] + u_CS[i][:,1:] ) / 2
             v_C = ( v_CS[i][:-1,:] + v_CS[i][1:,:] ) / 2
             
