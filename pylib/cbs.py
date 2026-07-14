@@ -62,6 +62,8 @@ class cbs_load:
         for i in range(self.ntiles):
             if level is None:
                 arr = numpy.ma.filled( self.tiles[i][var][time,:,:], numpy.nan ).astype( numpy.float32 )
+            elif level == 'all':
+                arr = numpy.ma.filled( self.tiles[i][var][time,:,:,:], numpy.nan ).astype( numpy.float32 )
             else:
                 arr = numpy.ma.filled( self.tiles[i][var][time,level,:,:], numpy.nan ).astype( numpy.float32 )
             
@@ -69,16 +71,36 @@ class cbs_load:
         
         return data_CS
     
-    def rotate(self, u_CS, v_CS, grid_CS):
+    def center(self, u_CS, v_CS, level=None):
+        if level == 'all':
+            for i in range(self.ntiles):
+                u_CS[i] = ( u_CS[i][:,:,:-1] + u_CS[i][:,:,1:] ) / 2
+                v_CS[i] = ( v_CS[i][:,:-1,:] + v_CS[i][:,1:,:] ) / 2
+        
+        else:
+            for i in range(self.ntiles):
+                u_CS[i] = ( u_CS[i][:,:-1] + u_CS[i][:,1:] ) / 2
+                v_CS[i] = ( v_CS[i][:-1,:] + v_CS[i][1:,:] ) / 2
+    
+    def rotate(self, u_CS, v_CS, grid_CS, level=None):
         u_East  = []
         v_North = []
         
-        for i in range(self.ntiles):
-            u_C = ( u_CS[i][:,:-1] + u_CS[i][:,1:] ) / 2
-            v_C = ( v_CS[i][:-1,:] + v_CS[i][1:,:] ) / 2
-            
-            u_East.append( grid_CS[i]['angleCS'] * u_C - grid_CS[i]['angleSN'] * v_C )
-            v_North.append( grid_CS[i]['angleSN'] * u_C + grid_CS[i]['angleCS'] * v_C )
+        if level == 'all':
+            for i in range(self.ntiles):
+                u_C = ( u_CS[i][:,:,:-1] + u_CS[i][:,:,1:] ) / 2
+                v_C = ( v_CS[i][:,:-1,:] + v_CS[i][:,1:,:] ) / 2
+                
+                u_East.append( grid_CS[i]['angleCS'] * u_C - grid_CS[i]['angleSN'] * v_C )
+                v_North.append( grid_CS[i]['angleSN'] * u_C + grid_CS[i]['angleCS'] * v_C )
+        
+        else:
+            for i in range(self.ntiles):
+                u_C = ( u_CS[i][:,:-1] + u_CS[i][:,1:] ) / 2
+                v_C = ( v_CS[i][:-1,:] + v_CS[i][1:,:] ) / 2
+                
+                u_East.append( grid_CS[i]['angleCS'] * u_C - grid_CS[i]['angleSN'] * v_C )
+                v_North.append( grid_CS[i]['angleSN'] * u_C + grid_CS[i]['angleCS'] * v_C )
         
         return u_East, v_North
     
@@ -99,6 +121,14 @@ class cbs_load:
         self.mask( level, grid_CS, data_W, data_U, data_V )
         
         return data_Eta, data_W, data_U, data_V
+    
+    def load3(self):
+        dataU = self.load( 'U', time=-1, level='all' )
+        dataV = self.load( 'V', time=-1, level='all' )
+        
+        self.center( dataU, dataV, level='all' )
+        
+        return dataU, dataV
     
     def get_KE_series(self, id='ke_mean'):
         time = numpy.ma.filled( self.monitor['T'] )

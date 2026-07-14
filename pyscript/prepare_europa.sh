@@ -1,5 +1,5 @@
 #!/bin/bash
-nx=32
+nx=64
 nz=20
 bathy='flat'
 

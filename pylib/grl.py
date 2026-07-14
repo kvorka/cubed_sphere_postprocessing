@@ -2,9 +2,14 @@ import numpy
 import netCDF4
 
 class grd_load:
-    def __init__(self, path2cs, ntiles, resolve):
-        self.load_CS_grid( path2cs, ntiles )
-        self.build_LL_grid( resolve )
+    def __init__(self, path2cs=None, ntiles=None, path2bin=None, resolve=None):
+        if path2cs is not None:
+            self.load_CS_grid( path2cs, ntiles )
+        elif path2bin is not None:
+            self.load_CS_grid2( path2bin )
+        
+        if resolve is not None:
+            self.build_LL_grid( resolve )
     
     def load_CS_grid(self, path2cs, ntiles):
         self.CS = []
@@ -19,6 +24,26 @@ class grd_load:
                               'angleCS' : numpy.ma.filled( grid['AngleCS'][:,:], numpy.nan ).astype( numpy.float32 ),
                               'angleSN' : numpy.ma.filled( grid['AngleSN'][:,:], numpy.nan ).astype( numpy.float32 ),
                               'hfac'    : numpy.ma.filled( grid['HFacC'][:,:], numpy.nan ).astype( numpy.float32 ) } )
+    
+    def load_CS_grid2(self, path2bin):
+        self.CS = []
+        
+        tmp = numpy.fromfile( f"tile001.mitgrid", dtype=">f8" )
+        nn  = int( numpy.sqrt( len(tmp) / 16 ) ) - 1
+        tmp = numpy.reshape( tmp, (nn+1,nn+1,16), order='F' )
+        
+        self.CS.append( { 'lon'     : tmp[:nn,:nn,0].astype( numpy.float32 ),
+                          'lat'     : tmp[:nn,:nn,1].astype( numpy.float32 ),
+                          'lon_b'   : tmp[:  ,:  ,5].astype( numpy.float32 ),
+                          'lat_b'   : tmp[:  ,:  ,6].astype( numpy.float32 ) } )
+        
+        for itile in range(1,6):
+            tmp = numpy.reshape( numpy.fromfile( f"tile00{itile+1}.mitgrid", dtype=">f8" ), (nn+1,nn+1,16), order='F' )
+            
+            self.CS.append( { 'lon'     : tmp[:nn,:nn,0].astype( numpy.float32 ),
+                              'lat'     : tmp[:nn,:nn,1].astype( numpy.float32 ),
+                              'lon_b'   : tmp[:  ,:  ,5].astype( numpy.float32 ),
+                              'lat_b'   : tmp[:  ,:  ,6].astype( numpy.float32 ) } )
     
     def build_LL_grid(self, res):
         lon_b = numpy.arange(-180.0, 180.0+res, res).astype( numpy.float32 )

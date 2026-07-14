@@ -9,7 +9,7 @@ copy_data() {
     cp "$1"grid.t* "$2"
 }
 
-copy_data "/nfsjk/kvorka/MITgcm-tides-custom/run_exch2/" "state/run_exch2_32x32x50/"
+copy_data "/nfsjk/kvorka/MITgcm-tides-custom/run_exch2/" "state/run_exch2_64x64x20/"
 #copy_data "/nfsjk/kvorka/MITgcm-tides-custom/run_cs32x32x20_Ah1e4_Av1e1_ridge/" "state/ridge_32x32x20_Ah1e4_Av1e1/"
 #copy_data "/nfsjk/kvorka/MITgcm-tides-custom/run_cs32x32x20_Ah1e3_Av1e0_ridge/" "state/ridge_32x32x20_Ah1e3_Av1e0/"
 #copy_data "/nfsjk/kvorka/MITgcm-tides-custom/run_cs32x32x20_Ah1e4_Av1e1_flat/" "state/flat_32x32x20_Ah1e4_Av1e1/"
