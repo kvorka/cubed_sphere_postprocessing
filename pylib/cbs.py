@@ -1,42 +1,60 @@
 import numpy
 import netCDF4
+import matplotlib.pyplot
 
 class cbs_load:
-    def __init__(self, path2cs, ntiles, load_monitor=False, load_data=True):
-        if load_data:
+    def __init__(self, path2cs, ntiles=None, load_monitor=False, load_data=True, name=None):
+        self.name         = name
+        self.load_data    = load_data
+        self.load_monitor = load_monitor
+        
+        if self.load_data:
             self.tiles  = []
             self.ntiles = ntiles
             
             for i in range(self.ntiles):
                 self.tiles.append( netCDF4.Dataset( f'{path2cs}state.0000000000.t{i+1:03d}.nc', 'r' ) )
         
-        if load_monitor:
+        if self.load_monitor:
             self.monitor = netCDF4.Dataset(path2cs+'monitor.0000000000.t001.nc', 'r')
         
-    def check_shapes(self, *args):
-        for var in args:
-            *leading, nlat, nlon = self.tiles[0][var].shape
-            
-            print( f'Variable: {var}' )
-            print( f'Time levels: {leading[0]}' )
-            
-            if len( leading ) == 2:
-                print( f'Radial levels: {leading[1]}' )
-            
-            print(f'Single tile lats: {nlat}')
-            print(f'Single tile lons: {nlon}')
-            print()
-    
-    def check_cfl(self):
-        cflU  = numpy.max( numpy.ma.filled( self.monitor['advcfl_uvel_max'] ) )
-        cflV  = numpy.max( numpy.ma.filled( self.monitor['advcfl_vvel_max'] ) )
-        cflW  = numpy.max( numpy.ma.filled( self.monitor['advcfl_wvel_max'] ) )
-        cflWb = numpy.max( numpy.ma.filled( self.monitor['advcfl_W_hf_max'] ) )
+    def check_data(self, *args):
+        if self.load_data:
+            for var in args:
+                *leading, nlat, nlon = self.tiles[0][var].shape
+                
+                print( f'Variable: {var}' )
+                print( f'Time levels: {leading[0]}' )
+                
+                if len( leading ) == 2:
+                    print( f'Radial levels: {leading[1]}' )
+                
+                print(f'Single tile lats: {nlat}')
+                print(f'Single tile lons: {nlon}')
+                print()
         
-        print( f'Azimuthal cfl: {cflU}' )
-        print( f'Meridional cfl: {cflV}' )
-        print( f'Vertical cfl: {cflW}' )
-        print( f'Vertical cfl with bathymetry: {cflWb}' )
+        if self.load_monitor:
+            KE    = numpy.max( numpy.ma.filled( self.monitor['ke_mean'] ) )
+            cflU  = numpy.max( numpy.ma.filled( self.monitor['advcfl_uvel_max'] ) )
+            cflV  = numpy.max( numpy.ma.filled( self.monitor['advcfl_vvel_max'] ) )
+            cflW  = numpy.max( numpy.ma.filled( self.monitor['advcfl_wvel_max'] ) )
+            cflWb = numpy.max( numpy.ma.filled( self.monitor['advcfl_W_hf_max'] ) )
+            
+            print( f'Mean kinetic energy: {KE}' )
+            print( f'Azimuthal cfl: {cflU}' )
+            print( f'Meridional cfl: {cflV}' )
+            print( f'Vertical cfl: {cflW}' )
+            print( f'Vertical cfl with bathymetry: {cflWb}' )
+            
+            time = numpy.ma.filled( self.monitor['T'] )
+            KE   = numpy.ma.filled( self.monitor['ke_mean'] )
+            
+            matplotlib.pyplot.plot( time, KE, linestyle='-' )
+            
+            matplotlib.pyplot.xlabel( 'Time [s]' )
+            matplotlib.pyplot.ylabel( 'KE' )
+            matplotlib.pyplot.grid( True )
+            matplotlib.pyplot.show()
     
     def load(self, var, time, level=None):
         data_CS = []
@@ -81,3 +99,9 @@ class cbs_load:
         self.mask( level, grid_CS, data_W, data_U, data_V )
         
         return data_Eta, data_W, data_U, data_V
+    
+    def get_KE_series(self, id='ke_mean'):
+        time = numpy.ma.filled( self.monitor['T'] )
+        KE   = numpy.ma.filled( self.monitor[id]  )
+        
+        return time, KE

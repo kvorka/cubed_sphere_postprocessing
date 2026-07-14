@@ -10,11 +10,6 @@ csLoader = cbs_load( path2cs      = path,
                      load_data    = True )
 
 #####################################################################
-## Check the shape of the data.                                    ##
+## Check the data.                                                 ##
 #####################################################################
-csLoader.check_shapes( 'Eta', 'U', 'V', 'W' )
-
-#####################################################################
-## Check the CFL criterions.                                       ##
-#####################################################################
-csLoader.check_cfl()
+csLoader.check_data( 'Eta', 'U', 'V', 'W' )

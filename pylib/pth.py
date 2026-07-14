@@ -10,5 +10,5 @@ path_exch2   = "state/run_exch2_32x32x50/";         ntiles_exch2   = 12
 #####################################################################
 ## The chosen one.                                                 ##
 #####################################################################
-path   = path_exch2
-ntiles = ntiles_exch2
+path   = path_flat1
+ntiles = ntiles_flat1
