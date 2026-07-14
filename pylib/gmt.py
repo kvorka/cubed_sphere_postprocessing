@@ -1,4 +1,3 @@
-import gc
 import numpy
 import pygmt
 
@@ -28,8 +27,6 @@ class gmt_load:
         
         self.xv = x[::self.vstride,::self.vstride].ravel()
         self.yv = y[::self.vstride,::self.vstride].ravel()
-        
-        gc.collect()
     
     def prepare_rng(self, data1, data2=None):
         if data2 is None:
@@ -108,8 +105,6 @@ class gmt_load:
                            fout   = namefig,
                            series = series,
                            index  = i )
-            
-            gc.collect()
     
     def vplot(self, dataU, dataV, namefig=None):
         series = ( False if len( dataU ) == 1 else True )
@@ -141,5 +136,3 @@ class gmt_load:
                            fout   = namefig,
                            series = series,
                            index  = i )
-            
-            gc.collect()

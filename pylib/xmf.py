@@ -2,7 +2,6 @@ import warnings
 warnings.filterwarnings( 'ignore', message='.*ESMF and ESMPy.*' )
 
 import os
-import gc
 import numpy
 import xesmf
 
@@ -34,4 +33,4 @@ class xmf_load:
             mask = ~numpy.isnan( data )
             data_out[mask] = data[mask]
         
-        gc.collect(); return data_out
+        return data_out

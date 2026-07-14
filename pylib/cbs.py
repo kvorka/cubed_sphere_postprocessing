@@ -1,11 +1,10 @@
-import gc
 import numpy
 import netCDF4
 
 class cbs_load:
     def __init__(self, path2cs, ntiles, load_monitor=False, load_data=True):
         if load_data:
-            self.tiles = []
+            self.tiles  = []
             self.ntiles = ntiles
             
             for i in range(self.ntiles):
@@ -50,7 +49,7 @@ class cbs_load:
             
             data_CS.append( arr )
         
-        gc.collect(); return data_CS
+        return data_CS
     
     def rotate(self, u_CS, v_CS, grid_CS):
         u_East  = []
@@ -63,7 +62,7 @@ class cbs_load:
             u_East.append( grid_CS[i]['angleCS'] * u_C - grid_CS[i]['angleSN'] * v_C )
             v_North.append( grid_CS[i]['angleSN'] * u_C + grid_CS[i]['angleCS'] * v_C )
         
-        gc.collect(); return u_East, v_North
+        return u_East, v_North
     
     def mask(self, level, grid_CS, *args):
         masks = [ ( grid['hfac'][level] == 0 ) for grid in grid_CS ]

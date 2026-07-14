@@ -1,4 +1,3 @@
-import gc
 import numpy
 import netCDF4
 
@@ -20,8 +19,6 @@ class grd_load:
                               'angleCS' : numpy.ma.filled( grid['AngleCS'][:,:], numpy.nan ).astype( numpy.float32 ),
                               'angleSN' : numpy.ma.filled( grid['AngleSN'][:,:], numpy.nan ).astype( numpy.float32 ),
                               'hfac'    : numpy.ma.filled( grid['HFacC'][:,:], numpy.nan ).astype( numpy.float32 ) } )
-        
-        gc.collect()
     
     def build_LL_grid(self, res):
         lon_b = numpy.arange(-180.0, 180.0+res, res).astype( numpy.float32 )
@@ -38,5 +35,3 @@ class grd_load:
                     'lat_b' : lat_b,
                     'lon2d' : lon2d,
                     'lat2d' : lat2d }
-        
-        gc.collect()
