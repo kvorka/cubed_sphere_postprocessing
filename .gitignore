@@ -1,11 +1,9 @@
 state
 __pycache__
 data
-compare_bits.py
 *.png
 *.mp4
 *.nc
 *.bin
-*.mitgrid
 *.m
 cs*
